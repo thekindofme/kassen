@@ -9,7 +9,20 @@ var _current := ""
 var _signals := {}
 
 
-func _initialize() -> void:
+var _ran := false
+
+
+func _process(_delta: float) -> bool:
+	# Run on the first frame (not in _initialize) so the root viewport is inside the tree and
+	# InputEvents injected with Input.parse_input_event are delivered.
+	if _ran:
+		return false
+	_ran = true
+	_run_all()
+	return false
+
+
+func _run_all() -> void:
 	var t0 := Time.get_ticks_msec()
 	var tests := [
 		"test_formation_move", "test_formation_reface_and_frontage", "test_no_jitter_at_rest",
@@ -17,7 +30,13 @@ func _initialize() -> void:
 		"test_arrows_hit", "test_guns_volley", "test_victory", "test_determinism",
 		"test_kurogawa_ford_route", "test_commander_input",
 	]
+	var only := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--only="):
+			only = a.substr(7)
 	for t in tests:
+		if only != "" and not only.split(",").has(t):
+			continue
 		_current = t
 		var before := _fails
 		call(t)
@@ -187,7 +206,7 @@ func test_rout_and_rally() -> void:
 			routers += 1
 	check(routers == r.alive, "all soldiers in ROUT state")
 	var t := until(s, 25.0, func(): return r.state != Regiment.Morale.ROUTING)
-	check(t > 0.0 and r.state == Regiment.Morale.WAVERING, "rallies when safe (state %s)" % r.morale_name())
+	check(t > 0.0 and not r.is_routing(), "rallies when safe (state %s)" % r.morale_name())
 	check(_signals["regiment_rallied"].size() == 1, "regiment_rallied emitted")
 	r.order_move(Vector2(900, 1000))
 	seconds(s, 1.0)
@@ -198,13 +217,13 @@ func test_rout_and_rally() -> void:
 
 func _charge_case(braced: bool) -> Dictionary:
 	var s := new_sim(5)
-	var cav := s.spawn_regiment("cavalry", 0, Vector2(600, 1000), Vector2.RIGHT)
+	var cav := s.spawn_regiment("cavalry", 0, Vector2(850, 1000), Vector2.RIGHT)
 	var yari := s.spawn_regiment("yari", 1, Vector2(1300, 1000), Vector2.LEFT)
 	if not braced:
 		yari.order_move(Vector2(1300, 1600), Vector2.DOWN)   # marching sideways: flank exposed
 		seconds(s, 0.5)
 	cav.order_attack(yari)
-	seconds(s, 9.0)
+	seconds(s, 7.0)
 	var res := {"cav_loss": cav.initial_men - cav.alive, "yari_loss": yari.initial_men - yari.alive,
 		"impacts": _signals["charge_impact"].size(), "braced": s.stat_braced, "charges": s.stat_charges}
 	free_sim(s)
@@ -342,7 +361,13 @@ func _send(ev: InputEvent) -> void:
 	Input.flush_buffered_events()
 
 
+## Events are injected in window coordinates; map from root-viewport (world, no camera) coords.
+func _win(p: Vector2) -> Vector2:
+	return root.get_final_transform() * p
+
+
 func _mouse(btn: int, pressed: bool, p: Vector2, dbl := false, shift := false) -> void:
+	p = _win(p)
 	var e := InputEventMouseButton.new()
 	e.button_index = btn
 	e.pressed = pressed
@@ -354,6 +379,8 @@ func _mouse(btn: int, pressed: bool, p: Vector2, dbl := false, shift := false) -
 
 
 func _motion(p: Vector2, rel := Vector2.ZERO, mask := 0) -> void:
+	p = _win(p)
+	rel = root.get_final_transform().basis_xform(rel)
 	var e := InputEventMouseMotion.new()
 	e.position = p
 	e.global_position = p

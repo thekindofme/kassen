@@ -63,6 +63,7 @@ var route_narrow := PackedFloat32Array()  # per waypoint: max frontage width (px
 var route_i := 0
 var travel_files := 0                 # temporary frontage override while crossing a ford (0 = none)
 var leader := -1
+var slot_n := 0                       # number of slots in the last assignment
 var slots_dirty := true
 var _slot_timer := 0.0
 
@@ -83,6 +84,7 @@ var avg_speed := 0.0
 var nearest_enemy: Regiment = null
 var nearest_enemy_dist := INF
 var height := 0.0
+var crowded := true                   # another regiment is close (sim enables separation)
 
 # --- morale / fatigue --------------------------------------------------------------
 var morale := 50.0
@@ -291,7 +293,8 @@ func assign_slots(c: Vector2, fwd: Vector2, f: int) -> void:
 		var d := -(pos[alive_ids[k]] - c).dot(fwd)
 		keys[k] = (int(d * 4.0) + 1_000_000) * 1024 + k
 	keys.sort()
-	var slot_arr: PackedInt32Array = sim.slot
+	var new_slot := PackedInt32Array()
+	new_slot.resize(n)
 	var rank_start := 0
 	while rank_start < n:
 		var cnt := mini(f, n - rank_start)
@@ -304,18 +307,21 @@ func assign_slots(c: Vector2, fwd: Vector2, f: int) -> void:
 		lk.sort()
 		for q in cnt:
 			var k2: int = lk[q] & 1023
-			slot_arr[alive_ids[k2]] = rank_start + q
+			new_slot[k2] = rank_start + q
 		rank_start += cnt
-	sim.slot = slot_arr
+	pos = PackedVector2Array()
+	st = PackedInt32Array()
+	sim.apply_slots(alive_ids, new_slot)
+	slot_n = n
 	# leader = front-centre soldier (or the general himself)
 	leader = -1
 	var front_mid := mini(f, n) / 2
-	if general_soldier >= 0 and st[general_soldier] < BattleSim.DEAD:
+	if general_soldier >= 0 and alive_ids.has(general_soldier):
 		leader = general_soldier
 	else:
-		for i in alive_ids:
-			if slot_arr[i] == front_mid:
-				leader = i
+		for k in n:
+			if new_slot[k] == front_mid:
+				leader = alive_ids[k]
 				break
 	slots_dirty = false
 	_slot_timer = 0.0
@@ -434,7 +440,7 @@ func tick_orders(dt: float) -> void:
 	if is_broken() or withdrawn:
 		return
 	if orders.is_empty():
-		braced = stats["brace"] and avg_speed < 10.0
+		braced = stats["brace"] and avg_speed < 25.0
 		return
 	braced = false
 	var o: Dictionary = orders[0]

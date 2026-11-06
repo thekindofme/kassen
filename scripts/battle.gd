@@ -245,16 +245,10 @@ class _TreeLayer extends Node2D:
 			return
 		_t = 0.0
 		var mm := mmi.multimesh
-		for k in terrain.trees.size():
-			var p := terrain.trees[k]
-			var under := false
-			var c := sim._query(p + Vector2(0, -20), 34.0)
-			for q in c:
-				var j: int = sim._nb[q]
-				var d: Vector2 = sim.pos[j] - p
-				if d.y < 12.0 and d.y > -70.0 and absf(d.x) < 40.0:
-					under = true
-					break
+		var trees := terrain.trees
+		for k in trees.size():
+			var p := trees[k]
+			var under := sim.any_soldier_in(Rect2(p.x - 40.0, p.y - 70.0, 80.0, 82.0))
 			var target := 0.35 if under else 1.0
 			if absf(alpha[k] - target) > 0.01:
 				alpha[k] = move_toward(alpha[k], target, 0.25)

@@ -1,0 +1,781 @@
+class_name AIGeneral
+extends Node2D
+## Enemy warlord (GDD §6). Commands one team through the public Regiment order API only
+## (order_move / order_attack / order_halt / order_withdraw / set_running / set_fire_at_will)
+## and observable sim state (positions, facings, morale states). It never reads the other
+## side's orders. The only "cheat" is a small difficulty-scaled morale bonus at battle start.
+##
+## Three layers, all driven by sim time (works with any time_scale and with manual stepping):
+##   1. Strategy (every ~2 s): posture ATTACK / DEFEND / SKIRMISH from relative strength
+##      (men × quality × morale), ranged balance, terrain (ford / high ground) and difficulty.
+##   2. Group tactics: a battle line facing the enemy centre of mass (yari + samurai), missiles
+##      screening ahead then retiring behind the line, cavalry on the wings hunting missiles,
+##      flanks, rears and routers, the general behind the line. Crosses rivers only at the ford.
+##   3. Unit micro (per regiment, staggered on the think tick): archers kite, gunners hold fire
+##      until effective range, spears brace against approaching cavalry, cavalry cycle-charge,
+##      wavering units fall back to the general.
+##
+## Usage: var ai := AIGeneral.new(); ai.sim = sim; ai.team = 1; add_child(ai)
+## Headless tests may set `auto = false` and call `update()` after stepping the sim.
+
+enum Posture { ATTACK, DEFEND, SKIRMISH }
+const POSTURE_NAMES := ["ATTACK", "DEFEND", "SKIRMISH"]
+enum CavState { WING, STAGE, CHARGE, DISENGAGE }
+
+## Unit quality per soldier (relative fighting value) indexed by UnitTypes enum.
+const QUALITY := [1.0, 0.8, 0.9, 2.2, 2.6, 4.0]
+
+const DIFF := {
+	"easy":   {"react": 0.9, "aggression": 0.7, "flank_radius": 550.0, "morale_bonus": -4.0, "engage": 170.0, "patience": 90.0},
+	"normal": {"react": 0.5, "aggression": 1.0, "flank_radius": 850.0, "morale_bonus": 0.0, "engage": 220.0, "patience": 55.0},
+	"hard":   {"react": 0.3, "aggression": 1.25, "flank_radius": 1200.0, "morale_bonus": 6.0, "engage": 260.0, "patience": 35.0},
+}
+
+var sim: BattleSim
+var team := 1
+@export_enum("easy", "normal", "hard") var difficulty := "normal"
+@export var debug_draw := false
+var auto := true                   # drive itself from _process
+var start_delay := 3.0
+var think_interval := 0.5          # base think tick; scaled by difficulty "react"
+var strategy_interval := 2.0
+var verbose := true                # print posture changes
+
+# --- strategic state -----------------------------------------------------------------
+var posture := Posture.ATTACK
+var posture_since := 0.0
+var all_out := false               # enemy broken: everybody attacks
+var line_anchor := Vector2.ZERO    # centre of our battle line (target)
+var line_fwd := Vector2.LEFT       # facing of the battle line
+var enemy_com := Vector2.ZERO
+var my_com := Vector2.ZERO
+var strength_ratio := 1.0
+var ranged_ratio := 1.0
+var ford := Vector2.INF
+var ford_a := Vector2.INF
+var ford_b := Vector2.INF
+var high_ground := Vector2.INF
+var crossing := false              # the river lies between us and the enemy
+var contact := false               # lines are close
+var general_withdrawn := false
+
+# --- per-regiment state (keyed by regiment id) ---------------------------------------
+var _next_think := {}              # id -> sim time of its next micro think
+var _dest := {}                    # id -> [pos, facing] of the last move we issued
+var _intent := {}                  # id -> [from, to, colour] for debug drawing
+var _cav := {}                     # id -> {"s": CavState, "t": time, "target": Regiment}
+var _enemy_prev := {}              # enemy id -> [pos, time] (velocity estimate from observation)
+var _enemy_vel := {}               # enemy id -> Vector2
+var _next_strategy := 0.0
+var _started := false
+var _line_slots := {}              # id -> Vector2 slot centre on the line
+
+# --- metrics for QA / tests ----------------------------------------------------------
+var stats := {"posture_changes": 0, "cav_charges": 0, "cav_charge_aspects": [], "cav_target_types": [],
+	"cav_disengages": 0, "braces": 0, "kites": 0, "fallbacks": 0, "general_commits": 0}
+
+
+func _cfg(key: String) -> float:
+	return DIFF.get(difficulty, DIFF["normal"])[key]
+
+
+func _process(_delta: float) -> void:
+	if auto:
+		update()
+	if debug_draw:
+		queue_redraw()
+
+
+## Called by battle.gd's fast-forward path; same as update().
+func think() -> void:
+	update()
+
+
+func update() -> void:
+	if sim == null or sim.paused or sim.ended or sim.time < start_delay:
+		return
+	if not _started:
+		_start()
+	_observe_enemies()
+	if sim.time >= _next_strategy:
+		_next_strategy = sim.time + strategy_interval * (_cfg("react") / 0.5)
+		_strategy()
+	var mine := sim.regiments_of(team)
+	for r in mine:
+		if r.is_broken() or r.withdrawn:
+			continue
+		if sim.time >= float(_next_think.get(r.id, 0.0)):
+			_next_think[r.id] = sim.time + think_interval * (_cfg("react") / 0.5)
+			_think_regiment(r)
+
+
+func _start() -> void:
+	_started = true
+	var mine := sim.regiments_of(team)
+	var n := maxi(1, mine.size())
+	for k in mine.size():
+		var r := mine[k]
+		# stagger: spread first thinks over one think interval so not all re-plan together
+		_next_think[r.id] = sim.time + think_interval * float(k) / n
+		r.morale = clampf(r.morale + _cfg("morale_bonus"), 0.0, 100.0)
+	_next_strategy = sim.time
+	var tm = sim.terrain
+	if tm != null and tm.map != null:
+		var m: MapDef = tm.map
+		if not m.fords.is_empty():
+			ford_a = m.fords[0]["a"]
+			ford_b = m.fords[0]["b"]
+			ford = (ford_a + ford_b) * 0.5
+		var hints: Dictionary = m.ai_hints
+		if hints.has("ford"):
+			ford = hints["ford"]
+		if hints.has("high_ground"):
+			high_ground = hints["high_ground"]
+	_log("AIGeneral online: team %d, difficulty %s, ford %s, high ground %s" % [team, difficulty, ford, high_ground])
+
+
+func _log(msg: String) -> void:
+	if verbose:
+		print("[AI t=%.1f] %s" % [sim.time, msg])
+
+
+# =====================================================================================
+#  Observation helpers (only what anyone can see on the field)
+# =====================================================================================
+
+func _observe_enemies() -> void:
+	for e in sim.enemies_of(team):
+		if e.alive <= 0 or e.withdrawn:
+			continue
+		var prev = _enemy_prev.get(e.id)
+		if prev != null:
+			var dt: float = sim.time - float(prev[1])
+			if dt >= 0.25:
+				var v: Vector2 = (e.mean_pos - prev[0]) / dt
+				_enemy_vel[e.id] = _enemy_vel.get(e.id, v).lerp(v, 0.6)
+				_enemy_prev[e.id] = [e.mean_pos, sim.time]
+		else:
+			_enemy_prev[e.id] = [e.mean_pos, sim.time]
+			_enemy_vel[e.id] = Vector2.ZERO
+
+
+func enemy_velocity(e: Regiment) -> Vector2:
+	return _enemy_vel.get(e.id, Vector2.ZERO)
+
+
+static func power(r: Regiment) -> float:
+	if r.is_broken() or r.withdrawn:
+		return 0.0
+	var m := clampf(r.morale / 60.0, 0.4, 1.3)
+	var f := 1.0 - 0.3 * r.fatigue
+	return float(r.alive) * QUALITY[r.type] * m * f
+
+
+func _standing(regs: Array[Regiment]) -> Array[Regiment]:
+	var out: Array[Regiment] = []
+	for r in regs:
+		if not r.is_broken() and not r.withdrawn:
+			out.append(r)
+	return out
+
+
+func _com(regs: Array[Regiment], skip_general := true) -> Vector2:
+	var c := Vector2.ZERO
+	var w := 0.0
+	for r in regs:
+		if skip_general and r.type == UnitTypes.GENERAL:
+			continue
+		c += r.mean_pos * float(r.alive)
+		w += float(r.alive)
+	if w <= 0.0:
+		for r in regs:
+			c += r.mean_pos
+			w += 1.0
+	return c / maxf(w, 1.0)
+
+
+func _blocked(a: Vector2, b: Vector2) -> bool:
+	return sim.terrain != null and sim.terrain.segment_blocked(a, b)
+
+
+func _water(p: Vector2) -> bool:
+	return sim.terrain != null and sim.terrain.is_water(p)
+
+
+# =====================================================================================
+#  Layer 1: strategy / posture
+# =====================================================================================
+
+var _impatient := false            # enemy sat passive too long: stop waiting, go and get him
+
+func _strategy() -> void:
+	var mine_all := sim.regiments_of(team)
+	var en_all := sim.enemies_of(team)
+	var mine := _standing(mine_all)
+	var enemies := _standing(en_all)
+	if enemies.is_empty() or mine.is_empty():
+		return
+	var my_p := 0.0
+	var en_p := 0.0
+	var my_r := 0.0
+	var en_r := 0.0
+	var en_init := 0
+	var en_stand := 0
+	var my_init := 0
+	var my_stand := 0
+	for r in mine_all:
+		my_init += r.initial_men
+		my_p += power(r)
+		if r.is_ranged() and not r.is_broken():
+			my_r += float(r.alive) * (1.2 if r.type == UnitTypes.TEPPO else 1.0)
+		if not r.is_broken() and not r.withdrawn:
+			my_stand += r.alive
+	for e in en_all:
+		en_init += e.initial_men
+		en_p += power(e)
+		if e.is_ranged() and not e.is_broken():
+			en_r += float(e.alive) * (1.2 if e.type == UnitTypes.TEPPO else 1.0)
+		if not e.is_broken() and not e.withdrawn:
+			en_stand += e.alive
+	strength_ratio = my_p / maxf(en_p, 1.0)
+	ranged_ratio = (my_r + 10.0) / (en_r + 10.0)
+	my_com = _com(mine)
+	enemy_com = _com(enemies)
+	crossing = ford != Vector2.INF and _blocked(my_com, enemy_com)
+	var gap := my_com.distance_to(enemy_com)
+	contact = gap < 520.0
+	var eff := strength_ratio * _cfg("aggression")
+	var en_frac := float(en_stand) / maxf(1.0, float(en_init))
+
+	# --- choose posture -----------------------------------------------------------
+	var want: int
+	var why := ""
+	var was_all_out := all_out
+	all_out = en_frac < 0.35 or eff > 2.4
+	if all_out:
+		want = Posture.ATTACK
+		why = "enemy broken (%.0f%% standing)" % (en_frac * 100.0) if en_frac < 0.35 else "overwhelming advantage"
+	elif eff < 0.8:
+		want = Posture.DEFEND
+		why = "outmatched"
+	elif ranged_ratio > 1.4 and eff < 1.6:
+		want = Posture.SKIRMISH
+		why = "missile advantage"
+	else:
+		want = Posture.ATTACK
+		why = "stronger or even"
+	# patience: an enemy that will not come is attacked (passive players lose)
+	if want != Posture.ATTACK and posture != Posture.ATTACK and sim.time - posture_since > _cfg("patience") \
+			and gap > 700.0 and eff > 0.55 and not _impatient:
+		_impatient = true
+		_log("enemy is passive for %.0f s: abandoning %s" % [sim.time - posture_since, POSTURE_NAMES[posture]])
+	if _impatient:
+		if gap < 450.0 and eff < 0.8:
+			_impatient = false
+		elif want != Posture.ATTACK:
+			want = Posture.ATTACK
+			why = "enemy passive"
+	if all_out and not was_all_out:
+		_log("ALL-OUT ATTACK: %s" % why)
+	if want != posture and (sim.time - posture_since > 6.0 or all_out or stats["posture_changes"] == 0):
+		_log("posture %s -> %s (%s; strength %.2f, ranged %.2f, crossing %s)" % [
+			POSTURE_NAMES[posture], POSTURE_NAMES[want], why, strength_ratio, ranged_ratio, crossing])
+		posture = want
+		posture_since = sim.time
+		stats["posture_changes"] += 1
+	elif stats["posture_changes"] == 0:
+		stats["posture_changes"] = 1
+		posture_since = sim.time
+		_log("posture %s (%s; strength %.2f, ranged %.2f, crossing %s)" % [
+			POSTURE_NAMES[posture], why, strength_ratio, ranged_ratio, crossing])
+
+	# --- save the general when the battle is lost -----------------------------------
+	var g := sim.general_of(team)
+	if g != null and not general_withdrawn and not g.is_broken() \
+			and float(my_stand) < float(my_init) * 0.3 and strength_ratio < 0.45:
+		general_withdrawn = true
+		g.order_withdraw()
+		_log("battle lost (strength %.2f): the general withdraws" % strength_ratio)
+
+	_plan_line(mine, enemies)
+
+
+# =====================================================================================
+#  Layer 2: group tactics (battle line, screens, wings, general)
+# =====================================================================================
+
+func _near_far_ford() -> Array:
+	## [near-side ford end, far-side ford end] relative to our army.
+	if ford_a == Vector2.INF:
+		return [ford, ford]
+	if my_com.distance_to(ford_a) < my_com.distance_to(ford_b):
+		return [ford_a, ford_b]
+	return [ford_b, ford_a]
+
+
+func _plan_line(mine: Array[Regiment], enemies: Array[Regiment]) -> void:
+	var line: Array[Regiment] = []
+	var missiles: Array[Regiment] = []
+	var cav: Array[Regiment] = []
+	for r in mine:
+		match r.type:
+			UnitTypes.YARI, UnitTypes.SAMURAI: line.append(r)
+			UnitTypes.YUMI, UnitTypes.TEPPO: missiles.append(r)
+			UnitTypes.CAVALRY: cav.append(r)
+	var cur_line := _com(line) if not line.is_empty() else my_com
+	var fwd := (enemy_com - cur_line).normalized()
+	var anchor := cur_line
+	var nf := _near_far_ford()
+	var bow_range := 600.0
+	for m in missiles:
+		if m.type == UnitTypes.YUMI:
+			bow_range = m.get_range()
+	match posture:
+		Posture.ATTACK:
+			if crossing and _blocked(cur_line, enemy_com):
+				# bridgehead: cross at the ford and form up on the far bank
+				var far: Vector2 = nf[1]
+				fwd = (enemy_com - far).normalized()
+				anchor = far + fwd * 320.0
+			else:
+				var stand := enemy_com - fwd * 200.0
+				var adv := minf(cur_line.distance_to(stand), 320.0)
+				anchor = cur_line + (stand - cur_line).normalized() * adv if adv > 1.0 else cur_line
+		Posture.DEFEND, Posture.SKIRMISH:
+			if crossing and ford != Vector2.INF:
+				# hold the river line: our bank, facing the ford
+				var near: Vector2 = nf[0]
+				var back := (my_com - near).normalized()
+				anchor = near + back * (280.0 if posture == Posture.DEFEND else 200.0)
+				fwd = (enemy_com - anchor).normalized().lerp(-back, 0.6).normalized()
+			elif posture == Posture.DEFEND and high_ground != Vector2.INF \
+					and high_ground.distance_to(my_com) < 1100.0 \
+					and high_ground.distance_to(enemy_com) > 700.0:
+				anchor = high_ground + fwd * 120.0
+			elif posture == Posture.SKIRMISH:
+				# line sits behind the archers' firing position
+				var stand := enemy_com - fwd * (bow_range * 0.85 + 130.0)
+				var adv := minf(cur_line.distance_to(stand), 300.0)
+				anchor = cur_line + (stand - cur_line).normalized() * adv if adv > 1.0 else cur_line
+			else:
+				anchor = cur_line
+	line_anchor = anchor
+	line_fwd = fwd
+	var right := Vector2(-fwd.y, fwd.x)
+	_line_slots.clear()
+
+	# battle line: keep current left-to-right order so nobody crosses
+	line.sort_custom(func(a, b): return (a.mean_pos - anchor).dot(right) < (b.mean_pos - anchor).dot(right))
+	var total := 0.0
+	for r in line:
+		total += _line_width(r) + 34.0
+	var x := -total * 0.5
+	var line_depth := 0.0
+	for r in line:
+		var w := _line_width(r) + 34.0
+		_line_slots[r.id] = {"pos": _dry(anchor + right * (x + w * 0.5), -fwd), "fwd": fwd, "role": "line"}
+		x += w
+		line_depth = maxf(line_depth, r.depth())
+	var half := maxf(total * 0.5, 150.0)
+
+	# missiles: screen ahead of the line, retire behind it
+	missiles.sort_custom(func(a, b): return (a.mean_pos - anchor).dot(right) < (b.mean_pos - anchor).dot(right))
+	for k in missiles.size():
+		var r := missiles[k]
+		var lat := (float(k) + 0.5) / missiles.size() * 2.0 - 1.0
+		var base := anchor + right * lat * half * 0.75
+		var ahead := line_depth * 0.5 + r.depth() * 0.5 + 60.0
+		_line_slots[r.id] = {"pos": _dry(base + fwd * ahead, -fwd), "back": _dry(base - fwd * (line_depth * 0.5 + r.depth() * 0.5 + 70.0), -fwd),
+			"fwd": fwd, "role": "missile"}
+
+	# cavalry: wings
+	cav.sort_custom(func(a, b): return (a.mean_pos - anchor).dot(right) < (b.mean_pos - anchor).dot(right))
+	for k in cav.size():
+		var r := cav[k]
+		var side := -1.0 if k % 2 == 0 else 1.0
+		if cav.size() == 1:
+			side = -1.0 if (r.mean_pos - anchor).dot(right) < 0.0 else 1.0
+		var p := anchor + right * side * (half + 120.0 + float(k / 2) * 120.0) - fwd * 40.0
+		_line_slots[r.id] = {"pos": _dry(p, -fwd), "fwd": fwd, "role": "cav"}
+
+	var g := sim.general_of(team)
+	if g != null:
+		_line_slots[g.id] = {"pos": _dry(anchor - fwd * (line_depth * 0.5 + 230.0), -fwd), "fwd": fwd, "role": "general"}
+
+
+func _line_width(r: Regiment) -> float:
+	return float(mini(r.files, maxi(r.alive, 1)) - 1) * r.spacing.x
+
+
+## Pushes `p` along `dir` until it is out of the river (lines never stand in deep water).
+func _dry(p: Vector2, dir: Vector2) -> Vector2:
+	p = p.clamp(Vector2(60, 60), sim.map_size - Vector2(60, 60))
+	var k := 0
+	while _water(p) and k < 20:
+		p += dir * 40.0
+		k += 1
+	return p
+
+
+# =====================================================================================
+#  Layer 3: unit micro
+# =====================================================================================
+
+func _think_regiment(r: Regiment) -> void:
+	var slot: Dictionary = _line_slots.get(r.id, {})
+	if slot.is_empty():
+		return
+	if r.type == UnitTypes.GENERAL:
+		_micro_general(r, slot)
+		return
+	# wavering units fall back toward the general to rally in his aura
+	if r.state == Regiment.Morale.WAVERING and r.morale < 26.0 and not r.is_engaged() and not all_out:
+		var g := sim.general_of(team)
+		if g != null and not g.is_broken() and not g.withdrawn and g.mean_pos.distance_to(r.mean_pos) > 260.0:
+			var to := g.mean_pos + (r.mean_pos - g.mean_pos).normalized() * 110.0
+			if _move_to(r, to, line_fwd, false, Color(1, 1, 0)):
+				stats["fallbacks"] += 1
+			return
+	match slot["role"]:
+		"line": _micro_line(r, slot)
+		"missile": _micro_missile(r, slot)
+		"cav": _micro_cav(r, slot)
+
+
+func _micro_line(r: Regiment, slot: Dictionary) -> void:
+	if r.is_engaged() and r.engaged * 4 >= r.alive:
+		return   # let the brawl run
+	# spears brace against approaching cavalry: halt and face it
+	if r.type == UnitTypes.YARI:
+		var threat := _cav_threat(r)
+		if threat != null:
+			var dir := (threat.mean_pos - r.mean_pos).normalized()
+			if not r.is_idle() or r.facing.dot(dir) < 0.85:
+				r.order_move(r.mean_pos, dir)
+				_dest[r.id] = [r.mean_pos, dir]
+				_intent[r.id] = [r.mean_pos, threat.mean_pos, Color(0.3, 0.6, 1)]
+				stats["braces"] += 1
+			return
+	var engage := _cfg("engage") * (1.8 if all_out else 1.0)
+	if posture != Posture.ATTACK:
+		engage = 140.0   # hold the line, only meet whoever comes to us
+	var cur := r.target()
+	if cur != null and not cur.is_out() and not cur.is_routing() and cur.mean_pos.distance_to(r.mean_pos) < engage * 1.6:
+		return
+	var best: Regiment = null
+	var best_s := INF
+	for e in sim.enemies_of(team):
+		if e.is_broken() or e.withdrawn:
+			continue
+		var d := r.mean_pos.distance_to(e.mean_pos) - e.depth() * 0.5
+		if d > engage:
+			continue
+		if _blocked(r.mean_pos, e.mean_pos):
+			continue
+		var s := d
+		if r.type == UnitTypes.YARI and e.type == UnitTypes.CAVALRY:
+			s -= 80.0
+		if e.is_ranged():
+			s -= 40.0
+		if s < best_s:
+			best_s = s
+			best = e
+	if best != null:
+		if r.target() != best:
+			r.order_attack(best, best_s < 170.0)
+			_dest.erase(r.id)
+			_intent[r.id] = [r.mean_pos, best.mean_pos, Color(1, 0.2, 0.2)]
+		return
+	_move_to(r, slot["pos"], slot["fwd"], false, Color(0.8, 0.8, 0.8))
+
+
+## An enemy cavalry regiment that is observably closing on `r` (no reading of its orders).
+func _cav_threat(r: Regiment) -> Regiment:
+	for e in sim.enemies_of(team):
+		if not e.is_mounted() or e.is_broken() or e.withdrawn:
+			continue
+		var to_r := r.mean_pos - e.mean_pos
+		var d := to_r.length()
+		if d > 420.0 or d < 30.0:
+			continue
+		if e.is_engaged() and d > 120.0:
+			continue
+		var closing := enemy_velocity(e).dot(to_r / d)
+		if closing > 45.0 or d < 160.0:
+			return e
+	return null
+
+
+func _nearest_melee_threat(r: Regiment) -> Array:
+	## [enemy, distance, closing speed] for the nearest non-broken enemy melee regiment.
+	var best: Regiment = null
+	var best_d := INF
+	for e in sim.enemies_of(team):
+		if e.is_broken() or e.withdrawn or e.is_ranged():
+			continue
+		var d := r.mean_pos.distance_to(e.mean_pos) - e.depth() * 0.5
+		if d < best_d:
+			best_d = d
+			best = e
+	var closing := 0.0
+	if best != null:
+		closing = enemy_velocity(best).dot((r.mean_pos - best.mean_pos).normalized())
+	return [best, best_d, closing]
+
+
+func _micro_missile(r: Regiment, slot: Dictionary) -> void:
+	var rng_r := r.get_range()
+	var th := _nearest_melee_threat(r)
+	var threat: Regiment = th[0]
+	var td: float = th[1]
+	var closing: float = th[2]
+	# gunners hold fire until the enemy is inside effective range (or they're being hit)
+	if r.type == UnitTypes.TEPPO:
+		var nearest := INF
+		for e in sim.enemies_of(team):
+			if not e.is_out():
+				nearest = minf(nearest, r.mean_pos.distance_to(e.mean_pos))
+		r.set_fire_at_will(nearest < rng_r * 0.8 or r.under_fire_t < 2.0)
+	# kite: step back from melee that is coming at us
+	var kite_d := 230.0 if r.type == UnitTypes.YUMI else 150.0
+	if threat != null and (td < kite_d or (td < kite_d * 1.6 and closing > 30.0)):
+		var away := (r.mean_pos - threat.mean_pos).normalized()
+		var back: Vector2 = slot["back"]
+		var to := back
+		# behind the line if that is actually away from the threat, else straight away
+		if (back - r.mean_pos).dot(away) < 0.0 or back.distance_to(threat.mean_pos) < 260.0:
+			to = r.mean_pos + away * 280.0
+		to = _dry(to, away)
+		if _move_to(r, to, -away, true, Color(1, 0.6, 0)):
+			stats["kites"] += 1
+		return
+	if r.is_engaged():
+		return
+	# melee lines are about to meet: retire behind our line
+	var line_close := threat != null and td < 480.0
+	if line_close and posture == Posture.ATTACK:
+		_move_to(r, slot["back"], slot["fwd"], false, Color(0.6, 0.6, 1))
+		return
+	# hold max range on the best target in reach
+	var tgt: Regiment = null
+	var tgt_d := INF
+	for e in sim.enemies_of(team):
+		if e.is_out():
+			continue
+		var d := r.mean_pos.distance_to(e.mean_pos)
+		if d < tgt_d:
+			tgt_d = d
+			tgt = e
+	if tgt != null and tgt_d < rng_r * 1.35 and (posture != Posture.DEFEND or tgt_d < rng_r):
+		var want := rng_r * 0.88
+		if absf(tgt_d - want) < 70.0 or tgt_d < want:
+			if tgt_d < want - 90.0:
+				var back_to := tgt.mean_pos + (r.mean_pos - tgt.mean_pos).normalized() * want
+				_move_to(r, _dry(back_to, -line_fwd), (tgt.mean_pos - r.mean_pos).normalized(), false, Color(1, 0.6, 0))
+			elif not r.is_idle():
+				r.order_halt()
+				_dest.erase(r.id)
+			return
+		var p := tgt.mean_pos + (r.mean_pos - tgt.mean_pos).normalized() * want
+		if not _blocked(r.mean_pos, p) or posture == Posture.ATTACK:
+			_move_to(r, _dry(p, -line_fwd), (tgt.mean_pos - p).normalized(), false, Color(1, 0.8, 0.2))
+			return
+	_move_to(r, slot["pos"], slot["fwd"], false, Color(0.9, 0.9, 0.5))
+
+
+func _cav_score(r: Regiment, e: Regiment, radius: float) -> float:
+	if e.withdrawn or e.alive <= 0 or e.state == Regiment.Morale.SHATTERED:
+		return -INF
+	var d := r.mean_pos.distance_to(e.mean_pos)
+	if d > radius:
+		return -INF
+	var s := 0.0
+	if e.is_routing():
+		s = 3.0
+	elif e.is_ranged():
+		s = 2.6
+	elif e.type == UnitTypes.YARI:
+		if not e.is_engaged():
+			return -INF   # never into the front of formed spears
+		s = 1.4
+	elif e.type == UnitTypes.CAVALRY:
+		s = 1.2
+	elif e.type == UnitTypes.GENERAL:
+		s = 2.2 if e.is_engaged() else 0.4
+	else:
+		s = 1.6 if e.is_engaged() else 0.2
+	if e.is_engaged() and not e.is_routing():
+		s += 0.8
+	s += 0.4 * (1.0 - float(e.alive) / maxf(1.0, float(e.initial_men)))
+	# danger: free (braced) spears near the target
+	for o in sim.enemies_of(team):
+		if o == e or o.type != UnitTypes.YARI or o.is_broken() or o.withdrawn or o.is_engaged():
+			continue
+		if o.mean_pos.distance_to(e.mean_pos) < 200.0:
+			s -= 1.4
+	# never chase across the river except via the ford: just discount it
+	if _blocked(r.mean_pos, e.mean_pos):
+		s -= 0.8
+	return s - d / radius
+
+
+func _micro_cav(r: Regiment, slot: Dictionary) -> void:
+	var c: Dictionary = _cav.get(r.id, {"s": CavState.WING, "t": sim.time, "target": null, "eng": -1.0})
+	_cav[r.id] = c
+	var tgt: Regiment = c["target"]
+	var radius := _cfg("flank_radius") * (1.5 if all_out else 1.0)
+	match c["s"]:
+		CavState.WING:
+			var best: Regiment = null
+			var best_s := 0.7
+			for e in sim.enemies_of(team):
+				var s := _cav_score(r, e, radius)
+				if s > best_s:
+					best_s = s
+					best = e
+			if best == null or r.fatigue > 0.75:
+				_move_to(r, slot["pos"], slot["fwd"], false, Color(0.4, 1, 0.4))
+				return
+			c["target"] = best
+			var to_t := best.mean_pos - r.mean_pos
+			var aspect := best.facing.dot(to_t.normalized())
+			if best.is_routing() or best.is_ranged() or aspect > -0.35:
+				_charge(r, c, best)
+			else:
+				# we'd hit its front: ride round to its flank first
+				var right := Vector2(-best.facing.y, best.facing.x)
+				var side := 1.0 if (r.mean_pos - best.mean_pos).dot(right) > 0.0 else -1.0
+				var stage := best.mean_pos + right * side * (best.width() * 0.5 + 230.0) - best.facing * 140.0
+				stage = _dry(stage, (r.mean_pos - stage).normalized())
+				c["s"] = CavState.STAGE
+				c["t"] = sim.time
+				r.order_move(stage, (best.mean_pos - stage).normalized(), 0, true)
+				_dest[r.id] = [stage, Vector2.ZERO]
+				_intent[r.id] = [r.mean_pos, stage, Color(0.4, 1, 0.4)]
+		CavState.STAGE:
+			if tgt == null or _cav_score(r, tgt, radius * 1.3) < 0.0:
+				c["s"] = CavState.WING
+				return
+			var to_t := tgt.mean_pos - r.mean_pos
+			var aspect := tgt.facing.dot(to_t.normalized())
+			if r.is_idle() or aspect > -0.2 or sim.time - float(c["t"]) > 12.0:
+				_charge(r, c, tgt)
+		CavState.CHARGE:
+			var done: bool = tgt == null or tgt.alive <= 0 or tgt.withdrawn or tgt.state == Regiment.Morale.SHATTERED \
+				or (r.target() == null and not r.is_engaged())
+			if tgt != null and tgt.is_routing() and tgt.mean_pos.distance_to(line_anchor) > 1100.0:
+				done = true   # don't chase routers off the map
+			if r.is_engaged():
+				if float(c["eng"]) < 0.0:
+					c["eng"] = sim.time
+				var winning := r.kills_recent > r.losses_recent * 1.5 + 0.5
+				if sim.time - float(c["eng"]) > 6.0 and not winning and not all_out:
+					_disengage(r, c, tgt)
+					return
+			else:
+				c["eng"] = -1.0
+			if done:
+				c["s"] = CavState.WING
+				c["target"] = null
+		CavState.DISENGAGE:
+			if sim.time - float(c["t"]) > 5.0 or (r.is_idle() and sim.time - float(c["t"]) > 2.0):
+				c["s"] = CavState.WING   # re-formed: free to charge again
+				c["target"] = null
+
+
+func _charge(r: Regiment, c: Dictionary, tgt: Regiment) -> void:
+	c["s"] = CavState.CHARGE
+	c["t"] = sim.time
+	c["eng"] = -1.0
+	c["target"] = tgt
+	r.order_attack(tgt, true)
+	_dest.erase(r.id)
+	_intent[r.id] = [r.mean_pos, tgt.mean_pos, Color(1, 0.1, 0.1)]
+	var aspect := tgt.facing.dot((tgt.mean_pos - r.mean_pos).normalized())
+	stats["cav_charges"] += 1
+	stats["cav_charge_aspects"].append(aspect)
+	stats["cav_target_types"].append("router" if tgt.is_routing() else tgt.type_key)
+
+
+func _disengage(r: Regiment, c: Dictionary, tgt: Regiment) -> void:
+	var away := (r.mean_pos - (tgt.mean_pos if tgt != null else r.mean_pos + line_fwd)).normalized()
+	var to := _dry(r.mean_pos + (away * 0.6 - line_fwd * 0.4).normalized() * 360.0, -line_fwd)
+	r.order_move(to, line_fwd, 0, true)
+	_dest[r.id] = [to, line_fwd]
+	_intent[r.id] = [r.mean_pos, to, Color(0.4, 1, 1)]
+	c["s"] = CavState.DISENGAGE
+	c["t"] = sim.time
+	stats["cav_disengages"] += 1
+
+
+func _micro_general(g: Regiment, slot: Dictionary) -> void:
+	if general_withdrawn:
+		return
+	# finish routers that are close and unprotected
+	var cur := g.target()
+	if cur != null and not cur.is_out() and cur.mean_pos.distance_to(line_anchor) < 900.0:
+		return
+	for e in sim.enemies_of(team):
+		if e.alive <= 0 or e.withdrawn or e.state == Regiment.Morale.SHATTERED:
+			continue
+		var d := g.mean_pos.distance_to(e.mean_pos)
+		var commit := (e.is_routing() and d < 500.0 and not _protected(e)) \
+			or (all_out and strength_ratio > 3.0 and e.is_engaged() and d < 450.0)
+		if commit and not _blocked(g.mean_pos, e.mean_pos):
+			g.order_attack(e, true)
+			_dest.erase(g.id)
+			stats["general_commits"] += 1
+			_log("general commits against %s (%s)" % [e.display_name, "router" if e.is_routing() else "overwhelming advantage"])
+			return
+	# keep out of reach of enemy melee
+	var th := _nearest_melee_threat(g)
+	if th[0] != null and float(th[1]) < 220.0 and not g.is_engaged():
+		var away := (g.mean_pos - (th[0] as Regiment).mean_pos).normalized()
+		_move_to(g, _dry(g.mean_pos + away * 300.0, away), line_fwd, true, Color(1, 1, 1))
+		return
+	_move_to(g, slot["pos"], slot["fwd"], false, Color(1, 1, 1))
+
+
+func _protected(e: Regiment) -> bool:
+	for o in sim.enemies_of(team):
+		if o != e and not o.is_broken() and not o.withdrawn and not o.is_ranged() \
+				and o.mean_pos.distance_to(e.mean_pos) < 260.0:
+			return true
+	return false
+
+
+## Issues order_move only when the destination meaningfully changed (avoids order churn).
+func _move_to(r: Regiment, p: Vector2, fwd: Vector2, run: bool, col: Color) -> bool:
+	_intent[r.id] = [r.mean_pos, p, col]
+	var last = _dest.get(r.id)
+	var tol := 70.0 if not run else 120.0
+	if last != null and r.target() == null:
+		var lp: Vector2 = last[0]
+		var lf: Vector2 = last[1]
+		var same_f := fwd == Vector2.ZERO or lf == Vector2.ZERO or lf.dot(fwd) > 0.94
+		if lp.distance_to(p) < tol and same_f and (not r.is_idle() or r.mean_pos.distance_to(p) < tol * 1.5):
+			return false
+	if r.is_idle() and r.mean_pos.distance_to(p) < 40.0 and r.facing.dot(fwd) > 0.94:
+		return false
+	r.order_move(p, fwd, 0, run)
+	_dest[r.id] = [p, fwd]
+	return true
+
+
+func _draw() -> void:
+	if not debug_draw or sim == null:
+		return
+	draw_circle(line_anchor, 10.0, Color(1, 0, 0, 0.8))
+	draw_line(line_anchor, line_anchor + line_fwd * 160.0, Color(1, 0, 0, 0.8), 4.0)
+	var right := Vector2(-line_fwd.y, line_fwd.x)
+	draw_line(line_anchor - right * 400.0, line_anchor + right * 400.0, Color(1, 0.3, 0.3, 0.4), 2.0)
+	for id in _intent:
+		var it: Array = _intent[id]
+		var r: Regiment = sim.regiments[id]
+		if r.is_broken() or r.withdrawn:
+			continue
+		draw_line(r.mean_pos, it[1], it[2], 2.0)
+		draw_circle(it[1], 5.0, it[2])
+	var font := ThemeDB.fallback_font
+	if font != null:
+		draw_string(font, line_anchor + Vector2(14, -14), "%s%s  str %.2f" % [POSTURE_NAMES[posture], " ALL-OUT" if all_out else "", strength_ratio], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 0.2, 0.2))

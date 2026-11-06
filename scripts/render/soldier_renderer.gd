@@ -127,27 +127,21 @@ func view_zoom() -> float:
 	return vp.get_canvas_transform().get_scale().x if vp != null else 1.0
 
 
-func _frame_for(i: int, ut: int, tm: int, st: int, spd: float) -> int:
+func _frame_for(i: int, ut: int, tm: int, st: int, spd: float, action_t: PackedFloat32Array, dead_t: PackedFloat32Array,
+		anim_t: PackedFloat32Array, actlen: PackedFloat32Array, a_start: PackedInt32Array, a_count: PackedInt32Array) -> int:
 	# returns the frame index into atlas.frames
-	var a := UnitTypes.ANIM_IDLE
-	var f := 0
-	var at := sim.action_t[i]
+	var base := (ut * 2 + tm) * 4
 	if st == BattleSim.DEAD:
-		a = UnitTypes.ANIM_DEATH
-		var si := UnitAtlas.slot_index(ut, tm, a)
-		var cnt := atlas.anim_count[si]
-		f = mini(int(sim.dead_t[i] * DEATH_FPS), cnt - 1)
-		return atlas.anim_start[si] + f
-	var alen := sim.T_ACTLEN[ut]
+		var si := base + UnitTypes.ANIM_DEATH
+		return a_start[si] + mini(int(dead_t[i] * DEATH_FPS), a_count[si] - 1)
+	var at := action_t[i]
+	var alen := actlen[ut]
 	if at < alen and (st == BattleSim.MELEE or st == BattleSim.SHOOT):
-		var si2 := UnitAtlas.slot_index(ut, tm, UnitTypes.ANIM_ACTION)
-		var cnt2 := atlas.anim_count[si2]
-		return atlas.anim_start[si2] + mini(int(at / alen * cnt2), cnt2 - 1)
-	if spd > 6.0:
-		a = UnitTypes.ANIM_WALK
-	var si3 := UnitAtlas.slot_index(ut, tm, a)
-	var cnt3 := atlas.anim_count[si3]
-	return atlas.anim_start[si3] + (int(sim.anim_t[i]) % cnt3)
+		var si2 := base + UnitTypes.ANIM_ACTION
+		var cnt2 := a_count[si2]
+		return a_start[si2] + mini(int(at / alen * cnt2), cnt2 - 1)
+	var si3 := base + (UnitTypes.ANIM_WALK if spd > 6.0 else UnitTypes.ANIM_IDLE)
+	return a_start[si3] + (int(anim_t[i]) % a_count[si3])
 
 
 func update_now() -> void:
@@ -163,6 +157,13 @@ func update_now() -> void:
 	var facev := sim.face
 	var vel := sim.vel
 	var fr := atlas.frames
+	var a_start := atlas.anim_start
+	var a_count := atlas.anim_count
+	var action_t := sim.action_t
+	var dead_t := sim.dead_t
+	var anim_t := sim.anim_t
+	var actlen := sim.T_ACTLEN
+	var trad := sim.T_RAD
 	var view := _view_rect()
 	var keys := PackedInt32Array()
 	keys.resize(n)
@@ -173,7 +174,7 @@ func update_now() -> void:
 			continue
 		if st == BattleSim.DEAD:
 			var si := UnitAtlas.slot_index(utype[i], team[i], UnitTypes.ANIM_DEATH)
-			if sim.dead_t[i] * DEATH_FPS >= float(atlas.anim_count[si]):
+			if dead_t[i] * DEATH_FPS >= float(a_count[si]):
 				if _corpse_done[i] == 0:
 					_add_corpse(i)
 				continue
@@ -185,9 +186,6 @@ func update_now() -> void:
 	keys.resize(count)
 	keys.sort()
 	visible_count = count
-	var buf := _buf
-	var sbuf := _sbuf
-	var rbuf := _rbuf
 	var nring := 0
 	var regs := sim.regiments
 	var pulse := 0.5 + 0.2 * sin(sim.time * 5.0)
@@ -200,78 +198,78 @@ func update_now() -> void:
 		var tm := team[i]
 		var p := ppos[i].lerp(spos[i], a)
 		var spd := vel[i].length()
-		var fi := _frame_for(i, ut, tm, st, spd) * 8
+		var fi := _frame_for(i, ut, tm, st, spd, action_t, dead_t, anim_t, actlen, a_start, a_count) * 8
 		var w := fr[fi + 4]
 		var h := fr[fi + 5]
 		var ax := fr[fi + 6]
 		var ay := fr[fi + 7]
 		var fl := facev[i]
 		var o := k * 16
-		buf[o] = w * fl
-		buf[o + 1] = 0.0
-		buf[o + 2] = 0.0
-		buf[o + 3] = p.x - ax * fl
-		buf[o + 4] = 0.0
-		buf[o + 5] = h
-		buf[o + 6] = 0.0
-		buf[o + 7] = p.y - ay
+		_buf[o] = w * fl
+		_buf[o + 1] = 0.0
+		_buf[o + 2] = 0.0
+		_buf[o + 3] = p.x - ax * fl
+		_buf[o + 4] = 0.0
+		_buf[o + 5] = h
+		_buf[o + 6] = 0.0
+		_buf[o + 7] = p.y - ay
 		var r: Regiment = regs[reg_of[i]]
 		var sel := 0.0
 		if r.selected:
 			sel = pulse
 		elif r == hover_reg:
 			sel = 0.3
-		buf[o + 8] = clampf(flash[i] / 0.14, 0.0, 1.0)
-		buf[o + 9] = sel
-		buf[o + 10] = 0.8 if st == BattleSim.ROUT else 1.0
-		buf[o + 11] = 1.0
-		buf[o + 12] = fr[fi]
-		buf[o + 13] = fr[fi + 1]
-		buf[o + 14] = fr[fi + 2]
-		buf[o + 15] = fr[fi + 3]
+		_buf[o + 8] = clampf(flash[i] / 0.14, 0.0, 1.0)
+		_buf[o + 9] = sel
+		_buf[o + 10] = 0.8 if st == BattleSim.ROUT else 1.0
+		_buf[o + 11] = 1.0
+		_buf[o + 12] = fr[fi]
+		_buf[o + 13] = fr[fi + 1]
+		_buf[o + 14] = fr[fi + 2]
+		_buf[o + 15] = fr[fi + 3]
 		# shadow
-		var rad := sim.T_RAD[ut]
+		var rad := trad[ut]
 		var sw := rad * 3.3
 		var sh := rad * 1.15
 		var so := k * 8
 		var sa := 1.0 if st != BattleSim.DEAD else 0.0
-		sbuf[so] = sw * sa
-		sbuf[so + 1] = 0.0
-		sbuf[so + 2] = 0.0
-		sbuf[so + 3] = p.x - sw * 0.5 + 3.0
-		sbuf[so + 4] = 0.0
-		sbuf[so + 5] = sh * sa
-		sbuf[so + 6] = 0.0
-		sbuf[so + 7] = p.y - sh * 0.5 + 1.0
+		_sbuf[so] = sw * sa
+		_sbuf[so + 1] = 0.0
+		_sbuf[so + 2] = 0.0
+		_sbuf[so + 3] = p.x - sw * 0.5 + 3.0
+		_sbuf[so + 4] = 0.0
+		_sbuf[so + 5] = sh * sa
+		_sbuf[so + 6] = 0.0
+		_sbuf[so + 7] = p.y - sh * 0.5 + 1.0
 		# selection / hover ring
 		if st != BattleSim.DEAD and (r.selected or r == hover_reg):
 			var rw := rad * 3.6
 			var rh := rad * 1.5
 			var ro := nring * 12
-			rbuf[ro] = rw
-			rbuf[ro + 1] = 0.0
-			rbuf[ro + 2] = 0.0
-			rbuf[ro + 3] = p.x - rw * 0.5
-			rbuf[ro + 4] = 0.0
-			rbuf[ro + 5] = rh
-			rbuf[ro + 6] = 0.0
-			rbuf[ro + 7] = p.y - rh * 0.5
+			_rbuf[ro] = rw
+			_rbuf[ro + 1] = 0.0
+			_rbuf[ro + 2] = 0.0
+			_rbuf[ro + 3] = p.x - rw * 0.5
+			_rbuf[ro + 4] = 0.0
+			_rbuf[ro + 5] = rh
+			_rbuf[ro + 6] = 0.0
+			_rbuf[ro + 7] = p.y - rh * 0.5
 			var c := Color(1.0, 0.82, 0.35, 0.95)
 			if r.team != team_player:
 				c = Color(0.95, 0.25, 0.2, 0.9)
 			elif not r.selected:
 				c = Color(1, 1, 1, 0.5)
-			rbuf[ro + 8] = c.r
-			rbuf[ro + 9] = c.g
-			rbuf[ro + 10] = c.b
-			rbuf[ro + 11] = c.a
+			_rbuf[ro + 8] = c.r
+			_rbuf[ro + 9] = c.g
+			_rbuf[ro + 10] = c.b
+			_rbuf[ro + 11] = c.a
 			nring += 1
 	var mm := mm_living.multimesh
-	mm.buffer = buf
+	mm.buffer = _buf
 	mm.visible_instance_count = count
-	mm_shadow.multimesh.buffer = sbuf
+	mm_shadow.multimesh.buffer = _sbuf
 	mm_shadow.multimesh.visible_instance_count = count
-	mm_ring.multimesh.buffer = rbuf
+	mm_ring.multimesh.buffer = _rbuf
 	mm_ring.multimesh.visible_instance_count = nring
 	fx_layer.queue_redraw()
 	banner_layer.queue_redraw()
@@ -318,13 +316,19 @@ class _FxLayer extends Node2D:
 		var pr := sim.projectiles
 		var a := sim.alpha
 		var view := r._view_rect()
+		var pprev := pr.prev
+		var ppos := pr.pos
+		var pz0 := pr.prev_z
+		var pz1 := pr.z
+		var pvel := pr.vel
+		var pvz := pr.vz
 		for k in pr.count:
-			var g := pr.prev[k].lerp(pr.pos[k], a)
+			var g := pprev[k].lerp(ppos[k], a)
 			if not view.has_point(g):
 				continue
-			var z := lerpf(pr.prev_z[k], pr.z[k], a)
-			var v := pr.vel[k]
-			var sdir := Vector2(v.x, v.y - pr.vz[k]).normalized()
+			var z := lerpf(pz0[k], pz1[k], a)
+			var v := pvel[k]
+			var sdir := Vector2(v.x, v.y - pvz[k]).normalized()
 			var head := g - Vector2(0, z)
 			var gd := v.normalized()
 			var sa := 0.28 * clampf(1.0 - z / 260.0, 0.25, 1.0)
@@ -362,14 +366,18 @@ class _BannerLayer extends Node2D:
 		var view := r._view_rect()
 		var inv_zoom := clampf(1.0 / maxf(r.view_zoom(), 0.01), 1.0, 2.6)
 		var font := ThemeDB.fallback_font
+		var state := sim.state
+		var utype := sim.utype
+		var face := sim.face
+		var uh := r.atlas.unit_height
 		for reg in sim.regiments:
 			if reg.alive <= 0 or reg.withdrawn:
 				continue
 			var L := reg.leader
-			if L < 0 or sim.state[L] >= BattleSim.DEAD:
+			if L < 0 or state[L] >= BattleSim.DEAD:
 				L = -1
 				for i in reg.soldiers:
-					if sim.state[i] < BattleSim.DEAD:
+					if state[i] < BattleSim.DEAD:
 						L = i
 						break
 				if L < 0:
@@ -377,9 +385,9 @@ class _BannerLayer extends Node2D:
 			var p := sim.render_pos(L)
 			if not view.has_point(p):
 				continue
-			var ut := sim.utype[L]
-			var h: float = r.atlas.unit_height[ut]
-			var fl := sim.face[L]
+			var ut := utype[L]
+			var h: float = uh[ut]
+			var fl := face[L]
 			var general := reg.type == UnitTypes.GENERAL
 			var s := inv_zoom * (1.35 if general else 1.0)
 			var pole_h := h + 18.0 * s

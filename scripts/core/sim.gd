@@ -14,8 +14,11 @@ signal melee_contact(pos: Vector2)
 signal volley(pos: Vector2, kind: String)          # kind: "arrow" | "gun"
 signal charge_impact(pos: Vector2, strength: float)
 signal general_killed(team: int)
+signal battle_started()
+signal projectile_hit(pos: Vector2, kind: String)  # "arrow" (landed on a soldier) | "gun" (bullet hit)
 
 const TICK_HZ := 30
+const PROF := false
 const DT := 1.0 / TICK_HZ
 const CELL := 32.0
 const ID_BITS := 13
@@ -26,8 +29,8 @@ const IDLE := 0
 const MOVE := 1
 const MELEE := 2
 const SHOOT := 3
-const DEAD := 4
-const ROUT := 5
+const ROUT := 4    # alive, fleeing (ordered before DEAD so `state < DEAD` = alive)
+const DEAD := 5
 const FLED := 6   # left the map (routed off or withdrew); not drawn, no corpse
 
 var map_size := Vector2(4800, 3200)
@@ -270,6 +273,15 @@ func pick_soldier(world: Vector2, team := -1, max_d := 18.0) -> int:
 	return best
 
 
+## True if any living soldier's feet are inside `rect` (used for canopy fading).
+func any_soldier_in(rect: Rect2) -> bool:
+	var c := _query(rect.get_center(), maxf(rect.size.x, rect.size.y) * 0.5)
+	for q in c:
+		if rect.has_point(pos[_nb[q]]):
+			return true
+	return false
+
+
 func regiment_at(world: Vector2, team := -1) -> Regiment:
 	var i := pick_soldier(world, team)
 	return regiments[reg_of[i]] if i >= 0 else null
@@ -286,6 +298,12 @@ func regiments_in_rect(rect: Rect2, team: int) -> Array[Regiment]:
 				out.append(r)
 				break
 	return out
+
+
+## Used by Regiment.assign_slots (avoids copying the slot array across objects).
+func apply_slots(ids: PackedInt32Array, slots: PackedInt32Array) -> void:
+	for k in ids.size():
+		slot[ids[k]] = slots[k]
 
 
 func fatigue_speed_mult(r: Regiment) -> float:
@@ -393,15 +411,24 @@ func step(ticks := 1) -> void:
 
 func _tick() -> void:
 	var dt := DT
+	if tick_count == 0:
+		battle_started.emit()
 	time += dt
 	tick_count += 1
+	var _t0 := Time.get_ticks_usec()
 	prev_pos = pos.duplicate()
 	_rebuild_hash()
+	var _t1 := Time.get_ticks_usec()
 	_regiment_pre(dt)
+	var _t2 := Time.get_ticks_usec()
 	_compute_slots()
+	var _t3 := Time.get_ticks_usec()
 	_soldiers(dt)
+	var _t4 := Time.get_ticks_usec()
 	projectiles.update(dt, self)
 	_regiment_post(dt)
+	if PROF:
+		print("hash %d pre %d slots %d soldiers %d post %d" % [_t1 - _t0, _t2 - _t1, _t3 - _t2, _t4 - _t3, Time.get_ticks_usec() - _t4])
 	if tick_count % 15 == 0:
 		_check_victory()
 	# expire gun fx
@@ -453,6 +480,7 @@ func _regiment_pre(dt: float) -> void:
 				if d < r.nearest_enemy_dist:
 					r.nearest_enemy_dist = d
 					r.nearest_enemy = e
+		_update_crowding()
 		_update_fire_targets()
 	for r in regiments:
 		if r.alive <= 0 or r.withdrawn:
@@ -474,6 +502,29 @@ func _regiment_pre(dt: float) -> void:
 		r.was_engaged = r.engaged > 0
 	# reset accumulators
 	_r_sum.fill(Vector2.ZERO); _r_cnt.fill(0); _r_eng.fill(0); _r_spd.fill(0.0); _r_err.fill(0.0); _r_free.fill(0)
+
+
+## A regiment is "crowded" when another regiment's footprint is close: only then do its
+## soldiers need separation (formation spacing already keeps a lone block apart).
+func _update_crowding() -> void:
+	for r in regiments:
+		r.crowded = r.engaged > 0
+	var R := regiments.size()
+	for a in R:
+		var ra := regiments[a]
+		if ra.alive <= 0 or ra.withdrawn:
+			continue
+		var ea := 0.5 * Vector2(ra.width(), ra.depth()).length() + 30.0
+		for b in range(a + 1, R):
+			var rb := regiments[b]
+			if rb.alive <= 0 or rb.withdrawn:
+				continue
+			var eb := 0.5 * Vector2(rb.width(), rb.depth()).length() + 30.0
+			if ra.mean_pos.distance_to(rb.mean_pos) < ea + eb:
+				ra.crowded = true
+				rb.crowded = true
+		if ra.is_routing() or ra.cohesion > ra.spacing.x:
+			ra.crowded = true
 
 
 func _update_fire_targets() -> void:
@@ -587,6 +638,17 @@ func _soldiers(dt: float) -> void:
 		var t := target[i]
 
 		# resolve a swing / shot in progress
+		# fast path: settled soldier of a quiet regiment
+		if st <= MOVE and stg <= 0.0 and pending[i] == -1 and not r.crowded and r.nearest_enemy_dist > 220.0 \
+				and v == Vector2.ZERO and _r_anchor_vel[r.id] == Vector2.ZERO and r.fire_target == null \
+				and p.distance_squared_to(slot_pos[i]) < 0.64:
+			anim_t[i] += dt * 6.0
+			state[i] = IDLE
+			target[i] = -1
+			_r_sum[r.id] += p
+			_r_cnt[r.id] += 1
+			_r_free[r.id] += 1
+			continue
 		var pd := pending[i]
 		if pd != -1 and action_t[i] >= T_HIT[ut]:
 			pending[i] = -1
@@ -680,7 +742,9 @@ func _soldiers(dt: float) -> void:
 					face[i] = 1.0 if r.facing.x > 0.0 else -1.0
 
 		# --- separation (recomputed on alternate ticks)
-		if (i & 1) == sep_phase:
+		if not r.crowded and t < 0 and st != ROUT:
+			sep[i] = Vector2.ZERO
+		elif (i & 1) == sep_phase:
 			var s := Vector2.ZERO
 			var c := _query(p, 26.0)
 			var mi := T_MASS[ut]
@@ -726,8 +790,8 @@ func _soldiers(dt: float) -> void:
 		vel[i] = v
 		var spd2 := v.length()
 		# charge readiness
-		if spd2 > run_s * 0.7:
-			charge_ready[i] = 1
+		if spd2 > run_s * 0.7 and t < 0:
+			charge_ready[i] = 1   # only a run-up from outside the melee counts as a charge
 		elif spd2 < run_s * 0.3:
 			charge_ready[i] = 0
 		# facing while moving
@@ -811,7 +875,7 @@ func _melee_hit(i: int, t: int, r: Regiment) -> void:
 		return
 	var dmg := T_DMG[ut] * rng.randf_range(0.75, 1.25)
 	if T_ANTICAV[ut] > 0.0 and T_MOUNT[vt] == 1:
-		dmg += T_ANTICAV[ut] * (1.0 if r.braced else 0.5)
+		dmg += T_ANTICAV[ut] * (1.25 if r.braced else 1.0)
 	dmg *= 100.0 / (100.0 + T_ARM[vt])
 	if aspect > 0:
 		vr.morale -= MoraleRules.FLANK_HIT_SHOCK if aspect == 1 else MoraleRules.REAR_HIT_SHOCK
@@ -827,7 +891,7 @@ func _charge(i: int, t: int, r: Regiment, spd: float, dir: Vector2) -> void:
 	action_t[i] = 0.0
 	cooldown[i] = T_INT[ut]
 	stat_charges += 1
-	if vr.braced and vr.stats["brace"] and aspect == 0 and state[t] != ROUT and vel[t].length() < 20.0:
+	if vr.braced and vr.stats["brace"] and vr.facing.dot(-dir) > -0.15 and state[t] != ROUT:
 		# braced spears: the charge breaks on the points
 		stat_braced += 1
 		var dmg := (T_ANTICAV[vt] * 1.5 + T_DMG[vt]) * rng.randf_range(0.85, 1.2)
@@ -838,6 +902,7 @@ func _charge(i: int, t: int, r: Regiment, spd: float, dir: Vector2) -> void:
 		vel[i] = -dir * 50.0
 		action_t[t] = 0.0
 		_add_charge(r, pos[t], ratio * 0.3 * T_MASS[ut])
+		r.morale -= 1.2
 		damage(i, dmg, vr)
 		return
 	var dmg2 := (T_DMG[ut] + T_CHG[ut] * ratio * 0.7) * rng.randf_range(0.85, 1.2)
@@ -964,11 +1029,14 @@ func _release_shot(i: int, r: Regiment, _pd: int) -> void:
 		var origin := p + Vector2(dir.x * 12.0, -2.0)
 		var max_len := T_RANGE[ut] * 1.08
 		var hit := _raycast_soldier(origin, dir, max_len, r.id)
+		if hit >= 0 and rng.randf() > 0.3 + acc * 0.5:
+			hit = -1   # ball misses / glances off
 		var end := origin + dir * max_len
 		stat_gun_shots += 1
 		if hit >= 0:
 			end = pos[hit]
 			stat_gun_hits += 1
+			projectile_hit.emit(pos[hit], "gun")
 			var vt := utype[hit]
 			var vr: Regiment = regiments[reg_of[hit]]
 			var dmg := T_MDMG[ut] * rng.randf_range(0.8, 1.25) * 100.0 / (100.0 + T_ARM[vt] * 0.35)
@@ -1036,11 +1104,14 @@ func arrow_impact(p: Vector2, shooter_team: int, _reg_id: int, dmg: float, _v: V
 		return
 	if terrain != null and terrain.is_forest(p) and rng.randf() < 0.5:
 		return
+	if rng.randf() < 0.2 + T_ARM[utype[best]] * 0.004:
+		return   # glances off armour / sticks in a sleeve
 	var vt := utype[best]
 	var d := dmg * rng.randf_range(0.8, 1.2) * 100.0 / (100.0 + T_ARM[vt] * 1.2)
 	if state[best] == ROUT:
 		d *= 1.2
 	stat_arrow_hits += 1
+	projectile_hit.emit(p, "arrow")
 	var vr: Regiment = regiments[reg_of[best]]
 	vr.under_fire_t = 0.0
 	var src: Regiment = regiments[_reg_id] if _reg_id >= 0 and _reg_id < regiments.size() else null
