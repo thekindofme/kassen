@@ -208,7 +208,7 @@ class Metrics:
 						if sim.state[i] == BattleSim.MELEE:
 							archer_melee += 1
 		# line coherence: before contact, while the line is not threading the ford
-		if any_eng or sim.time < 15.0:
+		if first_contact >= 0.0 or sim.time < 15.0:   # line discipline is judged on the approach
 			return
 		var line: Array[Regiment] = []
 		for r in mine:

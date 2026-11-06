@@ -276,6 +276,11 @@ func _strategy() -> void:
 	elif eff < 0.8:
 		want = Posture.DEFEND
 		why = "outmatched"
+	elif crossing and enemy_com.distance_to(ford) < 1000.0 and eff < 2.0 \
+			and not (posture == Posture.ATTACK and phase == "assault"):
+		# the enemy is at the river: let him come through the ford in column instead of us
+		want = Posture.DEFEND
+		why = "holding the ford, enemy at the river"
 	elif ranged_ratio > 1.4 and eff < 1.6 and not (posture == Posture.ATTACK and phase != "approach"):
 		want = Posture.SKIRMISH
 		why = "missile advantage"
@@ -530,7 +535,8 @@ func _micro_line(r: Regiment, slot: Dictionary) -> void:
 	elif posture == Posture.ATTACK:
 		engage = 140.0
 	if posture != Posture.ATTACK:
-		engage = 140.0   # hold the line, only meet whoever comes to us
+		# hold the line, only meet whoever comes to us (further at the ford: hit the column)
+		engage = 260.0 if crossing else 140.0
 	var cur := r.target()
 	if cur != null and not cur.is_out() and not cur.is_routing() and cur.mean_pos.distance_to(r.mean_pos) < engage * 1.6:
 		return
@@ -793,13 +799,15 @@ func _micro_general(g: Regiment, slot: Dictionary) -> void:
 	var cur := g.target()
 	if cur != null and not cur.is_out() and cur.mean_pos.distance_to(line_anchor) < 900.0:
 		return
+	if cur != null:
+		g.order_halt()   # pursuit went too far: come back to the army
 	for e in sim.enemies_of(team):
 		if e.alive <= 0 or e.withdrawn or e.state == Regiment.Morale.SHATTERED:
 			continue
 		var d := g.mean_pos.distance_to(e.mean_pos)
-		var commit := (e.is_routing() and d < 500.0 and not _protected(e)) \
+		var commit := (e.is_routing() and d < 500.0 and e.mean_pos.distance_to(line_anchor) < 750.0 and not _protected(e)) \
 			or (all_out and strength_ratio > 3.0 and e.is_engaged() and d < 450.0)
-		if commit and not _blocked(g.mean_pos, e.mean_pos):
+		if commit and not _blocked(g.mean_pos, e.mean_pos) and cur != e:
 			g.order_attack(e, true)
 			_dest.erase(g.id)
 			stats["general_commits"] += 1
