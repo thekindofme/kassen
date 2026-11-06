@@ -1,7 +1,7 @@
 #!/bin/bash
 # Record an E2E scenario to an H.264 mp4 (and a .log next to it).
 # Usage: tools/record.sh <scenario> <out.mp4> [extra user args...]
-#   e.g. tools/record.sh full_battle proof/e2e_full_battle.mp4
+#   e.g. tools/record.sh full_battle proof/e2e_full_battle.mp4   (E2E_MENU=1 to start from the title)
 # Runs through tools/render_run.sh (off-screen unless KASSEN_VISIBLE=1) with Godot's Movie Maker
 # (--write-movie, --fixed-fps 30: frame-perfect and deterministic, slower than real time), then
 # converts with ffmpeg (crf 20, yuv420p, faststart). Exit code: 0 if the log contains
@@ -16,6 +16,7 @@ LOG="${OUT%.*}.log"
 TMPDIR_REC="$(mktemp -d -t kassen_rec)"
 AVI="$TMPDIR_REC/run.avi"
 BOOT="--battle"
+[ "${E2E_MENU:-0}" = "1" ] && BOOT=""   # E2E_MENU=1: start at the title and click through the menus
 "$ROOT/tools/render_run.sh" --write-movie "$AVI" --fixed-fps 30 --resolution 1920x1080 \
   -- $BOOT --e2e="$SCENARIO" "$@" 2>&1 | tee "$LOG"
 rc=1

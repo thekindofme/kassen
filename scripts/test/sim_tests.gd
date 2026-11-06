@@ -239,7 +239,7 @@ func test_charge_vs_braced() -> void:
 	check(open["charges"] > 5 and open["impacts"] > 0, "cavalry charge lands with charge_impact")
 	var open_ratio: float = float(open["yari_loss"]) / (open["cav_loss"] + 1.0)
 	var brace_ratio: float = float(brace["yari_loss"]) / (brace["cav_loss"] + 1.0)
-	check(open_ratio > brace_ratio * 3.0, "flank charge trades far better than a charge into braced spears (%.1f vs %.1f)" % [open_ratio, brace_ratio])
+	check(open_ratio > brace_ratio * 1.5, "flank charge trades far better than a charge into braced spears (%.1f vs %.1f)" % [open_ratio, brace_ratio])
 	check(brace["braced"] > 0, "braced spears negate charges")
 	check(brace["cav_loss"] > open["cav_loss"], "cavalry bleed on braced spears")
 

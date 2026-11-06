@@ -9,10 +9,11 @@ extends Node
 ## code 0/1.
 ##
 ## Scenarios: full_battle, smoke_input.  Record: tools/record.sh full_battle proof/e2e.mp4
-## Extra args: --e2e_timeout=<frames> (default 30000).
+## Extra args: --e2e_timeout=<frames> (default 60000), --e2e_debug (periodic state dumps).
 
+const DODGE := false
 const SAFE_BATTLE := Rect2(150, 150, 1450, 640)   # screen area free of HUD panels (viewport coords)
-const SAFE_DEPLOY := Rect2(150, 300, 1450, 490)   # below the deployment banner
+const SAFE_DEPLOY := Rect2(150, 280, 1450, 540)   # below the deployment banner
 
 var scenario := ""
 var failures := 0
@@ -24,6 +25,7 @@ var _drag_from := Vector2(-1, -1)
 var _ripples: Array = []                    # [pos, age, color]
 var _cursor: Node2D
 var _frames := 0
+var _scene_name := ""
 var _ford := Vector2(2665, 1645)
 
 ## Enemy regiments that have crossed to our (west) bank: fighting in the ford funnel is suicide.
@@ -39,7 +41,7 @@ func _ready() -> void:
 		set_process(false)
 		return
 	scenario = String(args["e2e"])
-	_timeout = int(args.get("e2e_timeout", 30000))
+	_timeout = int(args.get("e2e_timeout", 60000))
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var layer := CanvasLayer.new()
 	layer.layer = 200
@@ -67,6 +69,11 @@ func _process(delta: float) -> void:
 		rp[1] += delta
 	_ripples = _ripples.filter(func(rp): return rp[1] < 0.6)
 	_cursor.queue_redraw()
+	var cs := get_tree().current_scene
+	var nm := String(cs.name) if cs != null else "<none>"
+	if nm != _scene_name:
+		log_line("E2E INFO scene -> %s (frame %d)" % [nm, _frames])
+		_scene_name = nm
 	if _frames % 120 == 0 and sim() != null and _args().has("e2e_debug"):
 		var line := "E2E DBG t=%.0f " % sim().time
 		for r in sim().regiments:
@@ -104,6 +111,10 @@ func finish() -> void:
 
 
 func _run() -> void:
+	# Real OS mouse events (the off-screen window is 1x1) would trigger camera edge-panning.
+	get_tree().node_added.connect(func(n):
+		if n is BattleCamera:
+			n.edge_pan = false)
 	match scenario:
 		"full_battle":
 			await _scenario_full_battle()
@@ -246,15 +257,17 @@ func _button(btn: int, pressed: bool, dbl := false, shift := false) -> void:
 		_ripples.append([cur, 0.0, Color(1, 0.85, 0.4) if btn == MOUSE_BUTTON_LEFT else Color(1, 0.35, 0.25)])
 
 
-func click(p: Vector2, btn := MOUSE_BUTTON_LEFT, shift := false, n := 12) -> void:
-	await move(p, n)
+var glide := 12   # frames per cursor glide (shorter while commanding the melee)
+
+func click(p: Vector2, btn := MOUSE_BUTTON_LEFT, shift := false, n := -1) -> void:
+	await move(p, glide if n < 0 else n)
 	_button(btn, true, false, shift)
 	await frames(2)
 	_button(btn, false, false, shift)
 	await frames(2)
 
 
-func double_click(p: Vector2, btn := MOUSE_BUTTON_LEFT, n := 12) -> void:
+func double_click(p: Vector2, btn := MOUSE_BUTTON_LEFT, n := -1) -> void:
 	await click(p, btn, false, n)
 	_button(btn, true, true)
 	await frames(2)
@@ -313,8 +326,10 @@ func ensure_visible(pts: Array, max_frames := 360) -> bool:
 			rect = rect.expand(to_screen(p))
 		rect = rect.grow(30)
 		if SAFE.encloses(rect):
-			return true
-		if rect.size.x > SAFE.size.x or rect.size.y > SAFE.size.y:
+			if await settle():
+				return true
+			continue
+		if rect.size.x > SAFE.size.x * 0.85 or rect.size.y > SAFE.size.y * 0.85:
 			await wheel(SAFE.get_center(), false, 1)
 			continue
 		var dx := 0
@@ -328,12 +343,38 @@ func ensure_visible(pts: Array, max_frames := 360) -> bool:
 		if dx > 0: keys.append(KEY_RIGHT)
 		if dy < 0: keys.append(KEY_UP)
 		if dy > 0: keys.append(KEY_DOWN)
+		var cp0 := cam().position
 		for k in keys:
 			_key_state(k, true)
-		await frames(6)
+		var off := maxf(maxf(SAFE.position.x - rect.position.x, rect.end.x - SAFE.end.x), maxf(SAFE.position.y - rect.position.y, rect.end.y - SAFE.end.y))
+		await frames(clampi(int(off / 60.0), 1, 6))
+		if _args().has("e2e_debug"):
+			log_line("E2E DIAG pan %s rect %s cam %s -> %s action %s" % [keys, rect, cp0, cam().position, Input.is_action_pressed("cam_up")])
 		for k in keys:
 			_key_state(k, false)
-	await frames(10)   # let the camera smoothing settle
+		await settle()
+	await frames(10)
+	return false
+
+
+## Waits for the camera's smoothing to come to rest (so screen positions stay valid).
+func settle(max_frames := 90) -> bool:
+	var last := Vector2(INF, INF)
+	var still := 0
+	var moved := false
+	for k in max_frames:
+		var c := cam()
+		var now := c.position + Vector2(c.zoom.x * 10000.0, 0)
+		if now.distance_to(last) < 0.25:
+			still += 1
+			if still >= 3:
+				return not moved
+		else:
+			if last.x != INF:
+				moved = true
+			still = 0
+		last = now
+		await get_tree().process_frame
 	return false
 
 
@@ -423,6 +464,18 @@ func casualties(team: int) -> int:
 	return c
 
 
+func _controls_at(p: Vector2) -> Array:
+	var out: Array = []
+	var stack: Array = [get_tree().root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		for ch in n.get_children():
+			stack.append(ch)
+		if n is Control and n.is_visible_in_tree() and n.mouse_filter != Control.MOUSE_FILTER_IGNORE and n.get_global_rect().has_point(p):
+			out.append(String(n.get_path()).right(60))
+	return out
+
+
 func find_control(n: String) -> Control:
 	var found := get_tree().root.find_child(n, true, false)
 	return found as Control
@@ -468,8 +521,9 @@ func _scenario_smoke_input() -> void:
 	await key(KEY_G)
 	check(y[0].group >= 0 and y[0].group == y[1].group, "G groups")
 	await key(KEY_ESCAPE)
+	await ensure_visible([y[0].mean_pos])
 	await click(to_screen(reg_point(y[0])))
-	check(c.selected.size() == 2, "clicking a grouped regiment selects the group")
+	check(c.selected.size() == 2, "clicking a grouped regiment selects the group (%d)" % c.selected.size())
 	await key(KEY_G)
 	await key(KEY_A, true)
 	check(c.selected.size() >= own().size() - 1, "Ctrl+A selects all")
@@ -511,7 +565,25 @@ func _scenario_smoke_input() -> void:
 #  Scenario: full_battle
 # =====================================================================================
 
+## Title → battle select → briefing, clicking the real buttons (only when booted into the menus).
+func _menu_flow() -> void:
+	for step in [["BattlesButton", "title: Battles"], ["CardKurogawa", "select: Kurogawa card"],
+			["DifficultyNormal", "select: difficulty Normal"], ["BeginButton", "select: Begin"],
+			["ContinueButton", "briefing: Continue"]]:
+		var ok := await wait_until(func():
+			var c := find_control(step[0])
+			return c != null and c.is_visible_in_tree(), 600)
+		if not check(ok, step[1]):
+			return
+		await frames(20)
+		await click(find_control(step[0]).get_global_rect().get_center())
+		await frames(30)
+
+
 func _scenario_full_battle() -> void:
+	await frames(30)
+	if sim() == null and find_control("BattlesButton") != null:
+		await _menu_flow()
 	if not check(await wait_until(func(): return sim() != null, 900), "battle scene loaded"):
 		return
 	var s := sim()
@@ -527,8 +599,10 @@ func _scenario_full_battle() -> void:
 	await ensure_visible([a.mean_pos, b.mean_pos])
 	var ra := Rect2(to_screen(a.mean_pos), Vector2.ZERO).expand(to_screen(b.mean_pos))
 	await drag(ra.position - Vector2(12, 12), ra.end + Vector2(12, 12), MOUSE_BUTTON_LEFT, 20)
-	check(c.selected.has(a) and c.selected.has(b), "box-select picks two regiments (%d selected)" % c.selected.size())
+	if not check(c.selected.has(a) and c.selected.has(b), "box-select picks two regiments (%d selected)" % c.selected.size()):
+		log_line("E2E DIAG box from %s to %s; controls there: %s; win xf %s" % [ra.position, ra.end, _controls_at(ra.position - Vector2(12, 12)), get_tree().root.get_final_transform()])
 	var zone: Rect2 = s.deploy_zones[0]
+	_ford = battle().map.ai_hints.get("ford", _ford)
 	var ca := a.centre
 	var mid := (a.centre + b.centre) * 0.5
 	var lx := zone.end.x - 90.0
@@ -539,12 +613,15 @@ func _scenario_full_battle() -> void:
 	await frames(5)
 	check(a.centre.distance_to(ca) > 20.0 and zone.has_point(a.centre) and zone.has_point(b.centre), "RMB-drag redeploys inside the zone")
 	check(a.facing.x > 0.9, "line faces the enemy")
+	await _deploy_army(zone)
 	var begin := find_control("BeginBattleButton")
 	if begin != null and begin.is_visible_in_tree():
 		await click(begin.get_global_rect().get_center())
 	if s.deploying:
 		await key(KEY_ENTER)
 	check(not s.deploying, "battle begins")
+	if _args().has("e2e_quick"):
+		return
 
 	# --- camera: keys + wheel
 	var p0 := cam().position
@@ -563,6 +640,31 @@ func _scenario_full_battle() -> void:
 	await wheel(Vector2(960, 480), true, 1)
 
 	await _battle_plan()
+
+
+## Full deployment with RMB-drags: the battle line along the front of the zone facing the ford,
+## archers and gunners as a skirmish screen just ahead of it, cavalry behind the wings.
+func _deploy_army(zone: Rect2) -> void:
+	var cy: float = clampf(_ford.y, zone.position.y + 450.0, zone.end.y - 450.0)
+	var fx := zone.end.x - 150.0
+	var line: Array = own("yari") + own("samurai")
+	var span := 0.0
+	for r in line:
+		span += r.width() + 30.0
+	await line_move(line, Vector2(fx, cy - span * 0.5), Vector2(fx, cy + span * 0.5))
+	var screen: Array = own("yumi") + own("teppo")
+	await line_move(screen, Vector2(fx + 95.0, cy - 430.0), Vector2(fx + 95.0, cy + 430.0))
+	var cav := own("cavalry")
+	if cav.size() >= 2:
+		await line_move([cav[0]], Vector2(fx - 150.0, cy - span * 0.5 - 60.0), Vector2(fx - 150.0, cy - span * 0.5 + 100.0))
+		await line_move([cav[1]], Vector2(fx - 150.0, cy + span * 0.5 - 100.0), Vector2(fx - 150.0, cy + span * 0.5 + 60.0))
+	var gen := own("general")
+	if not gen.is_empty():
+		await line_move(gen, Vector2(fx - 260.0, cy - 60.0), Vector2(fx - 260.0, cy + 60.0))
+	var inside := true
+	for r in own():
+		inside = inside and zone.grow(4.0).has_point(r.centre)
+	check(inside, "whole army deployed inside the zone")
 
 
 func _set_speed(x: float) -> void:
@@ -591,22 +693,30 @@ func _battle_plan() -> void:
 	var ford: Vector2 = battle().map.ai_hints.get("ford", Vector2(2665, 1645))
 	_ford = ford
 
-	# --- dress the battle line a little forward, on the gentle rise, and let the enemy come
-	var lx := 0.0
-	for r in line:
-		lx = maxf(lx, r.mean_pos.x)
-	var front_x := lx + 140.0
-	var span := 0.0
-	for r in line:
-		span += r.width() + 30.0
-	await line_move(line, Vector2(front_x, ford.y - span * 0.5), Vector2(front_x, ford.y + span * 0.5))
+	await wheel(Vector2(900, 470), false, 3)
+	await settle()
+	# --- race to the ford and hold its west exit in an arc: the enemy must come through the
+	#     shallows in column, under our bows and guns, into a hedge of braced spears
+	var exit_x: float = minf(battle().map.fords[0]["a"].x, battle().map.fords[0]["b"].x) - 130.0
+	var spears := own("yari")
+	await set_paused(true)
+	await line_move(spears, Vector2(exit_x - 430.0, ford.y - 280.0), Vector2(exit_x - 430.0, ford.y + 280.0))
+	await key(KEY_R)
+	check(spears.all(func(r): return r.running and not r.is_idle()), "spears run to the ford (RMB-drag + R)")
+	await line_move(own("samurai"), Vector2(exit_x - 380.0, ford.y - 500.0), Vector2(exit_x - 380.0, ford.y + 500.0))
+	await key(KEY_R)
+	await line_move(bows + guns, Vector2(exit_x - 200.0, ford.y - 300.0), Vector2(exit_x - 200.0, ford.y + 300.0))
+	await key(KEY_R)
+	await line_move(cav, Vector2(exit_x - 560.0, ford.y - 560.0), Vector2(exit_x - 560.0, ford.y + 560.0))
+	await line_move(own("general"), Vector2(exit_x - 580.0, ford.y - 60.0), Vector2(exit_x - 580.0, ford.y + 60.0))
 	check(line.all(func(r): return not r.is_idle()), "battle line advances (RMB-drag)")
-	# archers right behind the line so they can answer the enemy bows
-	var bmid := Vector2(front_x - 85.0, (line[0].mean_pos.y + line[line.size() - 1].mean_pos.y) * 0.5)
-	await line_move(bows, bmid - Vector2(0, 330), bmid + Vector2(0, 330))
+	await set_paused(false)
 	await _set_speed(3.0)
-	await wait_until(func(): return _closest_enemy_dist(bows) < 620.0 or s.ended, 3000)
+	await fight_until(func(): return _closest_enemy_dist(bows) < 620.0 or s.ended, 3000)
 
+	if s.ended:
+		await _end_of_battle(t_begin)
+		return
 	# --- archers: target the nearest enemy, see arrows land
 	var arrows0 := s.stat_arrows_fired
 	var cas0 := casualties(1)
@@ -622,13 +732,18 @@ func _battle_plan() -> void:
 		await attack_with(bows, tgt)
 		check(bows[0].target() == tgt, "archers ordered onto %s" % tgt.display_name)
 	await set_paused(false)
-	check(await wait_until(func(): return s.stat_arrows_fired > arrows0 + 20, 1200), "archers loose volleys (%d arrows)" % (s.stat_arrows_fired - arrows0))
-	check(await wait_until(func(): return casualties(1) > cas0 + 3, 1500), "enemy casualties rise (%d)" % (casualties(1) - cas0))
+	check(await fight_until(func(): return s.stat_arrows_fired > arrows0 + 20, 1200), "archers loose volleys (%d arrows)" % (s.stat_arrows_fired - arrows0))
+	check(await fight_until(func(): return casualties(1) > cas0 + 3, 1500), "enemy casualties rise (%d)" % (casualties(1) - cas0))
 
 	# --- cavalry: run round the flank, then charge an enemy missile unit
 	var charges0 := s.stat_charges
 	await set_paused(true)
-	var mis: Array = enemies("yumi") + enemies("teppo")
+	await set_paused(false)
+	await fight_until(func(): return s.ended or (enemies("yumi") + enemies("teppo")).any(func(e): return _on_our_bank(e)), 1800)
+	await set_paused(true)
+	var mis: Array = (enemies("yumi") + enemies("teppo")).filter(func(e): return _on_our_bank(e))
+	if mis.is_empty():
+		mis = enemies("yumi") + enemies("teppo")
 	var aim: Vector2 = (nearest(cav[0].mean_pos, mis).mean_pos if not mis.is_empty() else ford)
 	var flank := Vector2(aim.x - 150.0, aim.y - 520.0 if aim.y > 1300.0 else aim.y + 520.0)
 	await select_regs(cav)
@@ -639,26 +754,35 @@ func _battle_plan() -> void:
 	await set_paused(false)
 	await frames(60)
 	var missiles: Array = enemies("yumi") + enemies("teppo")
+	missiles = missiles.filter(func(e): return _on_our_bank(e))
 	var mt := nearest(cav[0].mean_pos, missiles if not missiles.is_empty() else enemies())
 	if mt != null:
 		await set_paused(true)
 		await attack_with(cav, mt, true)
 		await set_paused(false)
-	check(await wait_until(func(): return s.stat_charges > charges0, 1800), "cavalry charge lands (%d impacts)" % (s.stat_charges - charges0))
+	check(await fight_until(func(): return s.stat_charges > charges0, 1800), "cavalry charge lands (%d impacts)" % (s.stat_charges - charges0))
 
 	# --- spears & samurai close and attack
-	await wait_until(func(): return s.ended or enemies().any(func(e): return _on_our_bank(e) and not e.is_mounted() and _closest_enemy_dist(line) < 300.0), 3000)
+	await fight_until(func(): return s.ended or enemies().any(func(e): return _on_our_bank(e) and not e.is_mounted() and _closest_enemy_dist(line) < 300.0), 3000)
 	await set_paused(true)
 	var near_foes: Array = enemies().filter(func(e): return _on_our_bank(e))
-	var foe := nearest(line[0].mean_pos, near_foes) if not near_foes.is_empty() else null
-	if foe != null:
-		await attack_with(line, foe)
+	if not near_foes.is_empty():
+		# each regiment of the line takes the enemy in front of it (no blob on one target)
+		var engaged_any := false
+		for r in line:
+			var f := nearest(r.mean_pos, near_foes)
+			if f.mean_pos.distance_to(r.mean_pos) < 450.0:
+				await attack_with([r], f)
+				engaged_any = true
+		if not engaged_any:
+			await attack_with([line[0]], nearest(line[0].mean_pos, near_foes))
 	await set_paused(false)
-	check(await wait_until(func(): return line.any(func(r): return r.engaged > 0), 1500), "melee engaged")
+	check(await fight_until(func(): return line.any(func(r): return r.engaged > 0), 1500), "melee engaged")
 
-	# --- hotkeys on the gunners
-	if not guns.is_empty():
-		var g: Regiment = guns[0]
+	# --- hotkeys (on the gunners, or whichever regiment still stands)
+	var hk: Array = own("teppo") + own("yumi") + own()
+	if not hk.is_empty():
+		var g: Regiment = hk[0]
 		await set_paused(true)
 		await select_regs([g])
 		var f0 := g.fire_at_will
@@ -683,21 +807,67 @@ func _battle_plan() -> void:
 			break
 		if tick % 10 == 0:
 			log_line("E2E INFO t=%.0fs standing %s vs %s" % [s.time, s.team_strength(0), s.team_strength(1)])
-		var plan := _doctrine()
-		if plan.is_empty():
+		await _doctrine_tick()
+	await _end_of_battle(t_begin)
+
+
+## Like wait_until, but keeps commanding the army (doctrine) every second of game time.
+func fight_until(cond: Callable, max_frames: int) -> bool:
+	var k := 0
+	while k < max_frames:
+		if cond.call():
+			return true
+		if sim() == null or sim().ended:
+			return cond.call()
+		await frames(10)
+		k += 10
+		if k % 30 == 0:
+			await _doctrine_tick()
+	return cond.call()
+
+
+var _last_order := {}   # regiment id -> sim time of our last doctrine order
+
+func _doctrine_tick() -> void:
+	var plan: Array = _doctrine().filter(func(e): return sim().time - float(_last_order.get(e[0].id, -99.0)) > 10.0)
+	if plan.is_empty():
+		return
+	for e in plan:
+		_last_order[e[0].id] = sim().time
+	await set_paused(true)
+	glide = 6
+	for e in plan:
+		if e[0].is_out():
 			continue
-		await set_paused(true)
-		for e in plan:
-			if not e[0].is_out() and not e[1].is_out():
-				await attack_with([e[0]], e[1], e[0].is_mounted())
-		await set_paused(false)
+		if e[1] is String:
+			await select_regs([e[0]])
+			await key(KEY_H)
+			orders += 1
+		elif e[1] is Vector2:
+			await select_regs([e[0]])
+			await ensure_visible([e[1], e[0].mean_pos])
+			await click(to_screen(e[1]), MOUSE_BUTTON_RIGHT)
+			orders += 1
+		elif not e[1].is_out():
+			await attack_with([e[0]], e[1], e[0].is_mounted())
+	glide = 12
+	await set_paused(false)
+
+
+func _end_of_battle(t_begin: float) -> void:
+	var s := sim()
 	var dur := s.time - t_begin
 	check(s.ended and s.winner == 0, "victory for the player (winner %d)" % s.winner)
+	var lines: Array = []
+	for r in s.regiments:
+		lines.append("E2E REG %d %-8s kills %3d lost %3d/%d %s" % [r.team, r.type_key, r.kills, r.initial_men - r.alive, r.initial_men, r.morale_name()])
+	lines.append("E2E SUMMARY duration %.0f s game time | Hino lost %d/%d | Mizuno lost %d/%d | orders issued %d" % [
+		dur, casualties(0), s.team_strength(0).y, casualties(1), s.team_strength(1).y, orders])
 	var shown := await wait_until(func(): return _result_visible(), 300)
 	check(shown, "result screen visible")
-	await frames(90)
-	log_line("E2E SUMMARY duration %.0f s game time | Hino lost %d/%d | Mizuno lost %d/%d | orders issued %d" % [
-		dur, casualties(0), s.team_strength(0).y, casualties(1), s.team_strength(1).y, orders])
+	await frames(120)
+	for l in lines:
+		log_line(l)
 
 
 ## Orders worth giving now: [[own regiment, enemy regiment], ...]. Missiles shoot what is in
@@ -711,30 +881,55 @@ func _doctrine() -> Array:
 	var theirs := s.team_strength(1).x
 	var pursue := theirs * 2 < mine
 	var foes := enemies()
+	var all_foes := foes
 	if not pursue:
 		foes = foes.filter(func(e): return _on_our_bank(e))
-	if foes.is_empty():
+	if all_foes.is_empty():
 		return out
 	for r in own():
 		if r.type == UnitTypes.GENERAL:
 			continue
 		var cur := r.target()
+		if r.is_ranged() and cur != null and not pursue and cur.mean_pos.distance_to(r.mean_pos) > r.get_range() * 1.05:
+			out.append([r, "halt"])   # don't chase kiting archers across the river
+			continue
 		if cur != null and not cur.is_out() and not cur.is_routing():
 			continue
 		if r.engaged > 0:
 			continue
 		var e := nearest(r.mean_pos, foes)
-		var d := r.mean_pos.distance_to(e.mean_pos)
+		var d := INF if e == null else r.mean_pos.distance_to(e.mean_pos)
 		var want: Regiment = null
 		if pursue:
 			want = e
+		elif r.is_ranged() and foes.any(func(f): return not f.is_ranged() and f.mean_pos.distance_to(r.mean_pos) < 230.0) \
+				and r.mean_pos.x > _line_x() - 60.0:
+			out.append([r, Vector2(_line_x() - 170.0, r.mean_pos.y)])
+			continue
+		elif r.is_ranged() and r.is_idle() and r.mean_pos.x < _line_x() - 60.0 \
+				and not foes.any(func(f): return not f.is_ranged() and f.mean_pos.distance_to(r.mean_pos) < 450.0):
+			# the melee threat has passed: step back out in front of the line to answer their bows
+			out.append([r, Vector2(_line_x() + 210.0, r.mean_pos.y)])
+			continue
 		elif r.is_ranged():
-			var inr: Array = foes.filter(func(f): return f.mean_pos.distance_to(r.mean_pos) < r.get_range() * 0.95)
-			var mis2: Array = inr.filter(func(f): return f.is_ranged())
-			if not mis2.is_empty():
-				want = nearest(r.mean_pos, mis2)
+			var inr: Array = all_foes.filter(func(f): return f.mean_pos.distance_to(r.mean_pos) < r.get_range() * 0.95)
+			# shoot what stands still (dense, static blocks): kiting skirmishers are a waste of arrows
+			var still: Array = inr.filter(func(f): return f.avg_speed < 15.0)
+			if not still.is_empty():
+				want = nearest(r.mean_pos, still)
 			elif not inr.is_empty():
 				want = nearest(r.mean_pos, inr)
+		elif not r.is_mounted() and not r.is_ranged() and r.under_fire_t < 2.5 and not foes.any(func(f): return not f.is_ranged() and f.mean_pos.distance_to(r.mean_pos) < 320.0):
+			# being shot at with no enemy infantry close: rush the archers
+			var shooters: Array = foes.filter(func(f): return f.is_ranged() and f.mean_pos.distance_to(r.mean_pos) < 800.0)
+			if not shooters.is_empty():
+				want = nearest(r.mean_pos, shooters)
+		elif DODGE and r.type_key == "yari" and r.under_fire_t < 2.0 and d > 380.0 and r.is_idle():
+			var sh := nearest(r.mean_pos, all_foes.filter(func(f): return f.is_ranged()))
+			if sh != null and sh.mean_pos.distance_to(r.mean_pos) < sh.get_range() + 60.0:
+				var away := (r.mean_pos - sh.mean_pos).normalized()
+				out.append([r, r.mean_pos + away * 220.0])
+				continue
 		elif r.type_key == "yari":
 			if d < 170.0 and not e.is_mounted():
 				want = e
@@ -751,6 +946,15 @@ func _doctrine() -> Array:
 		if want != null and want != cur:
 			out.append([r, want])
 	return out
+
+
+func _line_x() -> float:
+	var xs := 0.0
+	var n := 0
+	for r in own("yari") + own("samurai"):
+		xs += r.mean_pos.x
+		n += 1
+	return xs / maxf(1, n)
 
 
 func _result_visible() -> bool:

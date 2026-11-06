@@ -548,12 +548,13 @@ var _r_free := PackedInt32Array()
 var _r_anchor_vel := PackedVector2Array()
 var _r_prev_centre := PackedVector2Array()
 var _r_flee := PackedVector2Array()
+var _r_tdir := PackedVector2Array()   # sum of directions to melee opponents (auto-face threats)
 
 func _regiment_pre(dt: float) -> void:
 	var R := regiments.size()
 	if _r_sum.size() != R:
 		_r_sum.resize(R); _r_cnt.resize(R); _r_eng.resize(R); _r_spd.resize(R); _r_err.resize(R)
-		_r_free.resize(R); _r_anchor_vel.resize(R); _r_prev_centre.resize(R); _r_flee.resize(R)
+		_r_free.resize(R); _r_anchor_vel.resize(R); _r_prev_centre.resize(R); _r_flee.resize(R); _r_tdir.resize(R)
 		for r in regiments:
 			_r_prev_centre[r.id] = r.centre
 	# aggregate last tick's soldier data
@@ -592,6 +593,8 @@ func _regiment_pre(dt: float) -> void:
 				fd += (r.mean_pos - r.nearest_enemy.mean_pos).normalized() * 0.8
 			_r_flee[r.id] = fd.normalized()
 			continue
+		if r.is_idle() and r.engaged * 4 >= r.alive and _r_tdir[r.id].length() > 2.0:
+			_face_threat(r, _r_tdir[r.id].normalized(), dt)
 		r.tick_orders(dt)
 		# per-tick caches read by every soldier of the regiment
 		r.c_speed_mult = MoraleRules.fatigue_speed_mult(r)
@@ -610,11 +613,27 @@ func _regiment_pre(dt: float) -> void:
 			r.reform_here()
 		r.was_engaged = r.engaged > 0
 	# reset accumulators
+	_r_tdir.fill(Vector2.ZERO)
 	_r_sum.fill(Vector2.ZERO); _r_cnt.fill(0); _r_eng.fill(0); _r_spd.fill(0.0); _r_err.fill(0.0); _r_free.fill(0)
 
 
 ## A regiment is "crowded" when another regiment's footprint is close: only then do its
 ## soldiers need separation (formation spacing already keeps a lone block apart).
+## An idle regiment fighting off-axis (flank or rear attack) wheels to face the threat, as TW
+## units do on their own, so it stops suffering flank penalties once it has turned.
+func _face_threat(r: Regiment, want: Vector2, dt: float) -> void:
+	var ang := r.facing.angle_to(want)
+	if absf(ang) < 0.35:
+		return
+	if absf(ang) > 1.2:
+		r.facing = want
+		r.dest_facing = want
+		r.assign_slots(r.centre, r.facing, r.files)
+	else:
+		r.facing = r.facing.rotated(clampf(ang, -1.2 * dt, 1.2 * dt))
+		r.dest_facing = r.facing
+
+
 func _update_crowding() -> void:
 	for r in regiments:
 		r.crowded = r.engaged > 0
@@ -795,6 +814,7 @@ func _soldiers(dt: float) -> void:
 				var dd := pt - p
 				var dl := maxf(dd.length(), 0.001)
 				var dir := dd / dl
+				_r_tdir[r.id] += dir
 				var reach := T_REACH[ut] + T_RAD[utype[t]]
 				var spd := v.length()
 				if dl > reach:
@@ -899,7 +919,7 @@ func _soldiers(dt: float) -> void:
 		vel[i] = v
 		var spd2 := v.length()
 		# charge readiness
-		if spd2 > run_s * 0.7 and t < 0:
+		if spd2 > run_s * 0.7 and t < 0 and r.engaged == 0:
 			charge_ready[i] = 1   # only a run-up from outside the melee counts as a charge
 		elif spd2 < run_s * 0.3:
 			charge_ready[i] = 0
@@ -1018,7 +1038,12 @@ func _charge(i: int, t: int, r: Regiment, spd: float, dir: Vector2) -> void:
 	action_t[i] = 0.0
 	cooldown[i] = T_INT[ut]
 	stat_charges += 1
-	if vr.braced and vr.stats["brace"] and vr.facing.dot(-dir) > -0.15 and state[t] != ROUT:
+	var braced_front: bool = vr.braced and vr.stats["brace"] and vr.facing.dot(-dir) > -0.15 and state[t] != ROUT
+	if braced_front and T_MOUNT[ut] == 0:
+		# infantry rushing a hedge of braced spears: the charge is simply absorbed (no impact)
+		vel[i] = vel[i] * 0.4
+		return
+	if braced_front:
 		# braced spears: the charge breaks on the points
 		stat_braced += 1
 		var dmg := (T_ANTICAV[vt] * 1.5 + T_DMG[vt]) * rng.randf_range(0.85, 1.2)
@@ -1032,7 +1057,7 @@ func _charge(i: int, t: int, r: Regiment, spd: float, dir: Vector2) -> void:
 		r.morale -= 1.2
 		damage(i, dmg, vr)
 		return
-	var dmg2 := (T_DMG[ut] + T_CHG[ut] * ratio * 0.7) * rng.randf_range(0.85, 1.2)
+	var dmg2 := (T_DMG[ut] + T_CHG[ut] * ratio * 0.7) * rng.randf_range(0.85, 1.2) * (1.0 + 0.25 * aspect)
 	dmg2 *= 100.0 / (100.0 + T_ARM[vt])
 	var impulse := minf(170.0, T_MASS[ut] * ratio * 110.0 / T_MASS[vt])
 	# morale shock scales with the impact's weight relative to the victim regiment's size, so a
@@ -1053,7 +1078,7 @@ func _charge(i: int, t: int, r: Regiment, spd: float, dir: Vector2) -> void:
 			stagger[j] = maxf(stagger[j], 0.3)
 	vel[i] = vel[i] * 0.55
 	_add_charge(r, pos[t], ratio * T_MASS[ut])
-	if rng.randf() < 0.88:
+	if rng.randf() < (0.88 if aspect == 0 else 0.97):
 		damage(t, dmg2, r)
 
 

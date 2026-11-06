@@ -15,8 +15,8 @@ const NEAR_ROUT_RADIUS := 450.0
 const GENERAL_DEATH_SHOCK := 25.0
 const GUN_VOLLEY_SHOCK := 3.5       # teppo scare per volley received
 const GUN_HIT_SHOCK := 0.6
-const FLANK_HIT_SHOCK := 0.35
-const REAR_HIT_SHOCK := 0.8
+const FLANK_HIT_SHOCK := 0.12
+const REAR_HIT_SHOCK := 0.35
 
 
 static func state_for(morale: float) -> int:
@@ -76,8 +76,8 @@ static func tick(r: Regiment, dt: float, aura: bool, high: bool) -> void:
 		return
 	var d := 0.0
 	if r.engaged > 0:
-		if r.losses_recent > r.kills_recent * 1.3 + 0.6:
-			d -= 2.6
+		if r.losses_recent > r.kills_recent * 1.5 + 1.0:
+			d -= 1.0
 		elif r.kills_recent > r.losses_recent * 1.3 + 0.6:
 			d += 1.2
 	if aura:
