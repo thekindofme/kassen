@@ -1,0 +1,55 @@
+yari_idle: 8 frames OK
+yari_walk: 8 frames OK
+yari_attack: 8 frames OK
+yari_death: 8 frames OK
+  yari_idle: factor 0.306  world height median 44.0 max 45.6
+  yari_walk: factor 0.356  world height median 31.8 max 32.4
+  yari_attack: factor 0.507  world height median 36.6 max 41.3
+  yari_death: factor 0.382  world height median 31.9 max 43.0
+yari: idle length 15.6 world px
+yumi_idle: 8 frames OK
+yumi_walk: 8 frames OK
+yumi_shoot: 8 frames OK
+yumi_death: 8 frames OK
+  yumi_idle: factor 0.322  world height median 44.0 max 45.1
+  yumi_walk: factor 0.376  world height median 43.2 max 44.0
+  yumi_shoot: factor 0.375  world height median 42.7 max 43.3
+  yumi_death: factor 0.363  world height median 30.4 max 44.5
+yumi: idle length 20.8 world px
+teppo_idle: 8 frames OK
+teppo_walk: 8 frames OK
+teppo_fire: 8 frames teppo: stripped flash/smoke in frames 3-4
+teppo_death: 8 frames OK
+  teppo_idle: factor 0.328  world height median 44.0 max 44.7
+  teppo_walk: factor 0.375  world height median 46.2 max 47.3
+  teppo_fire: factor 0.379  world height median 44.2 max 45.9
+  teppo_death: factor 0.426  world height median 38.2 max 44.1
+teppo: idle length 25.6 world px
+samurai_idle: 8 frames OK
+samurai_walk: 8 frames OK
+samurai_attack: 8 frames only 6 body comps -> column cuts
+samurai_death: 8 frames OK
+  samurai_idle: factor 0.364  world height median 46.0 max 47.3
+  samurai_walk: factor 0.368  world height median 46.9 max 47.7
+  samurai_attack: factor 0.402  world height median 46.3 max 48.4
+  samurai_death: factor 0.399  world height median 32.6 max 46.7
+samurai: idle length 27.8 world px
+cavalry_idle: 8 frames OK
+cavalry_walk: 8 frames OK
+cavalry_attack: 8 frames only 7 body comps -> column cuts
+cavalry_death: 8 frames merged-bodies
+  cavalry_idle: factor 0.753  world height median 64.0 max 64.5
+  cavalry_walk: factor 0.993  world height median 53.8 max 57.6
+  cavalry_attack: factor 0.763  world height median 68.4 max 71.5
+  cavalry_death: factor 0.797  world height median 50.2 max 73.3
+cavalry: idle length 56.0 world px
+general_idle: 8 frames OK
+general_walk: 8 frames OK
+general_attack: 8 frames OK
+general_death: 8 frames OK
+  general_idle: factor 0.645  world height median 64.0 max 77.9
+  general_walk: factor 0.784  world height median 55.3 max 62.2
+  general_attack: factor 0.608  world height median 63.3 max 69.3
+  general_death: factor 0.742  world height median 51.1 max 57.4
+general: idle length 52.6 world px
+atlas 4096x4096, used rows 2456

@@ -1,0 +1,324 @@
+{
+ "_scale": 2.0,
+ "_note": "w,h,ax,ay in image px; image px = world px * _scale; anchor = foot (ground contact)",
+ "pines_0": {
+  "w": 380,
+  "h": 259,
+  "ax": 118.5,
+  "ay": 256.0,
+  "kind": "tree",
+  "world_h": 129.5
+ },
+ "pines_1": {
+  "w": 451,
+  "h": 249,
+  "ax": 92.7,
+  "ay": 246.0,
+  "kind": "tree",
+  "world_h": 124.5
+ },
+ "pines_2": {
+  "w": 355,
+  "h": 324,
+  "ax": 148.4,
+  "ay": 321.0,
+  "kind": "tree",
+  "world_h": 162.0
+ },
+ "pines_3": {
+  "w": 512,
+  "h": 268,
+  "ax": 170.0,
+  "ay": 265.0,
+  "kind": "tree",
+  "world_h": 134.0
+ },
+ "maples_0": {
+  "w": 340,
+  "h": 247,
+  "ax": 166.8,
+  "ay": 244.0,
+  "kind": "tree",
+  "world_h": 123.5
+ },
+ "maples_1": {
+  "w": 343,
+  "h": 245,
+  "ax": 164.8,
+  "ay": 241.0,
+  "kind": "tree",
+  "world_h": 122.5
+ },
+ "maples_2": {
+  "w": 351,
+  "h": 304,
+  "ax": 166.2,
+  "ay": 301.0,
+  "kind": "tree",
+  "world_h": 152.0
+ },
+ "maples_3": {
+  "w": 342,
+  "h": 301,
+  "ax": 160.6,
+  "ay": 298.0,
+  "kind": "tree",
+  "world_h": 150.5
+ },
+ "bamboo_0": {
+  "w": 276,
+  "h": 271,
+  "ax": 118.8,
+  "ay": 268.0,
+  "kind": "bamboo",
+  "world_h": 135.5
+ },
+ "bamboo_1": {
+  "w": 339,
+  "h": 304,
+  "ax": 159.4,
+  "ay": 301.0,
+  "kind": "bamboo",
+  "world_h": 152.0
+ },
+ "bamboo_2": {
+  "w": 281,
+  "h": 277,
+  "ax": 154.8,
+  "ay": 274.0,
+  "kind": "bamboo",
+  "world_h": 138.5
+ },
+ "rocks_0": {
+  "w": 149,
+  "h": 132,
+  "ax": 49.3,
+  "ay": 129.0,
+  "kind": "rock",
+  "world_h": 66.0
+ },
+ "rocks_1": {
+  "w": 94,
+  "h": 87,
+  "ax": 46.1,
+  "ay": 84.0,
+  "kind": "rock",
+  "world_h": 43.5
+ },
+ "rocks_2": {
+  "w": 83,
+  "h": 68,
+  "ax": 39.9,
+  "ay": 65.0,
+  "kind": "rock",
+  "world_h": 34.0
+ },
+ "rocks_3": {
+  "w": 124,
+  "h": 83,
+  "ax": 49.7,
+  "ay": 80.0,
+  "kind": "rock",
+  "world_h": 41.5
+ },
+ "rocks_4": {
+  "w": 99,
+  "h": 119,
+  "ax": 32.3,
+  "ay": 116.0,
+  "kind": "rock",
+  "world_h": 59.5
+ },
+ "rocks_5": {
+  "w": 122,
+  "h": 89,
+  "ax": 50.1,
+  "ay": 86.0,
+  "kind": "rock",
+  "world_h": 44.5
+ },
+ "houses_0": {
+  "w": 371,
+  "h": 344,
+  "ax": 186.1,
+  "ay": 340.0,
+  "kind": "house",
+  "world_h": 172.0
+ },
+ "houses_1": {
+  "w": 446,
+  "h": 278,
+  "ax": 272.1,
+  "ay": 275.0,
+  "kind": "house",
+  "world_h": 139.0
+ },
+ "houses_2": {
+  "w": 394,
+  "h": 282,
+  "ax": 237.4,
+  "ay": 279.0,
+  "kind": "house",
+  "world_h": 141.0
+ },
+ "shrine_0": {
+  "w": 317,
+  "h": 304,
+  "ax": 172.2,
+  "ay": 301.0,
+  "kind": "shrine",
+  "world_h": 152.0
+ },
+ "shrine_1": {
+  "w": 248,
+  "h": 259,
+  "ax": 58.1,
+  "ay": 256.0,
+  "kind": "shrine",
+  "world_h": 129.5
+ },
+ "shrine_2": {
+  "w": 78,
+  "h": 162,
+  "ax": 38.9,
+  "ay": 159.0,
+  "kind": "shrine",
+  "world_h": 81.0
+ },
+ "shrine_3": {
+  "w": 78,
+  "h": 162,
+  "ax": 38.5,
+  "ay": 159.0,
+  "kind": "shrine",
+  "world_h": 81.0
+ },
+ "fences_0": {
+  "w": 146,
+  "h": 111,
+  "ax": 12.0,
+  "ay": 108.0,
+  "kind": "fence",
+  "world_h": 55.5
+ },
+ "fences_1": {
+  "w": 124,
+  "h": 116,
+  "ax": 19.2,
+  "ay": 113.0,
+  "kind": "fence",
+  "world_h": 58.0
+ },
+ "fences_2": {
+  "w": 132,
+  "h": 111,
+  "ax": 60.5,
+  "ay": 108.0,
+  "kind": "fence",
+  "world_h": 55.5
+ },
+ "fences_3": {
+  "w": 173,
+  "h": 120,
+  "ax": 79.0,
+  "ay": 117.0,
+  "kind": "fence",
+  "world_h": 60.0
+ },
+ "camp_0": {
+  "w": 280,
+  "h": 284,
+  "ax": 56.1,
+  "ay": 281.0,
+  "kind": "camp",
+  "world_h": 142.0
+ },
+ "camp_1": {
+  "w": 95,
+  "h": 127,
+  "ax": 47.3,
+  "ay": 124.0,
+  "kind": "camp",
+  "world_h": 63.5
+ },
+ "camp_2": {
+  "w": 55,
+  "h": 273,
+  "ax": 5.1,
+  "ay": 270.0,
+  "kind": "camp",
+  "world_h": 136.5
+ },
+ "camp_3": {
+  "w": 42,
+  "h": 213,
+  "ax": 5.5,
+  "ay": 210.0,
+  "kind": "camp",
+  "world_h": 106.5
+ },
+ "bushes_0": {
+  "w": 73,
+  "h": 61,
+  "ax": 36.4,
+  "ay": 58.0,
+  "kind": "bush",
+  "world_h": 30.5
+ },
+ "bushes_1": {
+  "w": 70,
+  "h": 63,
+  "ax": 32.4,
+  "ay": 60.0,
+  "kind": "bush",
+  "world_h": 31.5
+ },
+ "bushes_2": {
+  "w": 73,
+  "h": 60,
+  "ax": 32.8,
+  "ay": 57.0,
+  "kind": "bush",
+  "world_h": 30.0
+ },
+ "bushes_3": {
+  "w": 71,
+  "h": 72,
+  "ax": 34.8,
+  "ay": 69.0,
+  "kind": "bush",
+  "world_h": 36.0
+ },
+ "bushes_4": {
+  "w": 73,
+  "h": 54,
+  "ax": 34.5,
+  "ay": 51.0,
+  "kind": "bush",
+  "world_h": 27.0
+ },
+ "bushes_5": {
+  "w": 72,
+  "h": 54,
+  "ax": 35.0,
+  "ay": 51.0,
+  "kind": "bush",
+  "world_h": 27.0
+ },
+ "bushes_6": {
+  "w": 77,
+  "h": 64,
+  "ax": 30.9,
+  "ay": 61.0,
+  "kind": "bush",
+  "world_h": 32.0
+ },
+ "bushes_7": {
+  "w": 73,
+  "h": 67,
+  "ax": 35.5,
+  "ay": 64.0,
+  "kind": "bush",
+  "world_h": 33.5
+ }
+}

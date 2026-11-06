@@ -1,0 +1,42 @@
+terrain grass: seam 1.40 -> 1.36  mean [95, 113, 57] luma 0.397 sd 0.075
+terrain meadow: seam 1.36 -> 1.33  mean [131, 125, 75] luma 0.475 sd 0.075
+terrain dirt: seam 1.40 -> 1.38  mean [122, 90, 58] luma 0.376 sd 0.073
+terrain mud: seam 1.50 -> 1.49  mean [104, 80, 54] luma 0.330 sd 0.075
+terrain forestfloor: seam 1.30 -> 1.26  mean [82, 90, 54] luma 0.327 sd 0.075
+terrain riverbed: seam 1.89 -> 1.16 (offset-blend fixed) mean [62, 90, 99] luma 0.324 sd 0.071
+terrain sand: seam 1.69 -> 1.07 (offset-blend fixed) mean [126, 116, 94] luma 0.457 sd 0.075
+terrain paddy: seam 2.45 -> 1.83 (offset-blend fixed) mean [86, 105, 74] luma 0.376 sd 0.075
+ui mon_hino: keyed, square 1107px -> 512/128
+ui mon_mizuno: keyed, square 1202px -> 512/128
+ui lacquer: seam 1.46 -> 1.46
+ui washi: seam 1.46 -> 1.46
+art art_defeat.png: -> assets/art/defeat.jpg 1920x1080
+art art_kurogawa.png: -> assets/art/kurogawa.jpg 1920x1080
+art art_tenmoku.png: -> assets/art/tenmoku.jpg 1920x1080
+art art_title.png: -> assets/art/title.jpg 1920x1080
+art art_victory.png: -> assets/art/victory.jpg 1920x1080
+portrait cavalry: crop x0=256 side=1024
+portrait general: crop x0=256 side=1024
+portrait samurai: crop x0=256 side=1024
+portrait teppo: crop x0=256 side=1024
+portrait yari: crop x0=256 side=1024
+portrait yumi: crop x0=256 side=1024
+terrain grass: seam 1.40 -> 1.36  mean [89, 105, 53] luma 0.370 sd 0.075
+terrain meadow: seam 1.36 -> 1.33  mean [102, 97, 58] luma 0.370 sd 0.074
+terrain dirt: seam 1.40 -> 1.38  mean [120, 88, 57] luma 0.370 sd 0.072
+terrain mud: seam 1.50 -> 1.49  mean [110, 85, 57] luma 0.350 sd 0.075
+terrain forestfloor: seam 1.30 -> 1.26  mean [85, 93, 56] luma 0.340 sd 0.075
+terrain riverbed: seam 1.89 -> 1.16 (offset-blend fixed) mean [63, 92, 101] luma 0.330 sd 0.072
+terrain sand: seam 1.69 -> 1.07 (offset-blend fixed) mean [102, 94, 76] luma 0.370 sd 0.075
+terrain paddy: seam 2.45 -> 1.83 (offset-blend fixed) mean [85, 103, 73] luma 0.370 sd 0.075
+props pines: 4 objects, factor 0.640
+props maples: 4 objects, factor 0.598
+props bamboo: 3 objects, factor 0.527
+props rocks: 6 objects, factor 0.269
+props houses: 3 objects, factor 0.628
+props shrine: 4 objects, factor 0.448
+props fences: 4 objects, factor 0.252
+props camp: 4 objects, factor 0.285
+props bushes: 8 objects, factor 0.227
+fx: {'smoke': 4, 'blood': 6, 'flash': 2}
+fx: {'smoke': 4, 'dropped_dust': 3, 'blood': 3, 'flash': 2}
