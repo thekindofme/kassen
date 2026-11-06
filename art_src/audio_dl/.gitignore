@@ -1,0 +1,7 @@
+# Raw audio downloads are not committed (large; re-fetch with the URLs in README.md).
+# Only this file, the README and the processing/synthesis scripts are tracked.
+*
+!.gitignore
+!README*
+!synth/
+!synth/*.py
