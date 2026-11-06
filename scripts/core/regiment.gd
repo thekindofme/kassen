@@ -84,6 +84,11 @@ var avg_speed := 0.0
 var nearest_enemy: Regiment = null
 var nearest_enemy_dist := INF
 var height := 0.0
+# per-tick caches filled by the sim (avoid dictionary look-ups in the soldier loop)
+var c_speed_mult := 1.0
+var c_target: Regiment = null
+var c_ranged := false
+var c_fire_reach := -1.0
 var crowded := true                   # another regiment is close (sim enables separation)
 
 # --- morale / fatigue --------------------------------------------------------------

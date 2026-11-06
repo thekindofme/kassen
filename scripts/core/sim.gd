@@ -19,7 +19,6 @@ signal deployment_started()
 signal projectile_hit(pos: Vector2, kind: String)  # "arrow" (landed on a soldier) | "gun" (bullet hit)
 
 const TICK_HZ := 30
-const PROF := false
 const DT := 1.0 / TICK_HZ
 const CELL := 32.0
 const ID_BITS := 13
@@ -469,6 +468,34 @@ func _process(delta: float) -> void:
 
 
 ## Advance `ticks` fixed steps immediately (tests, fast-forward).
+## Per-section profiling (wall-clock usec): hash, regiments, slots, soldiers, missiles+morale, total.
+const PROF_NAMES := ["hash", "regiments", "slots", "soldiers", "missiles+morale", "total"]
+var prof_sum := PackedInt64Array([0, 0, 0, 0, 0, 0])
+var prof_max := PackedInt64Array([0, 0, 0, 0, 0, 0])
+var prof_ticks := 0
+
+
+func _prof_add(k: int, us: int) -> void:
+	prof_sum[k] += us
+	if us > prof_max[k]:
+		prof_max[k] = us
+	if k == 5:
+		prof_ticks += 1
+
+
+func prof_reset() -> void:
+	prof_sum.fill(0)
+	prof_max.fill(0)
+	prof_ticks = 0
+
+
+func prof_report() -> String:
+	var out := ""
+	for k in PROF_NAMES.size():
+		out += "%s %.2f/%.1f  " % [PROF_NAMES[k], prof_sum[k] / 1000.0 / maxi(1, prof_ticks), prof_max[k] / 1000.0]
+	return out + "(avg/max ms)"
+
+
 func step(ticks := 1) -> void:
 	for k in ticks:
 		_tick()
@@ -494,8 +521,9 @@ func _tick() -> void:
 	var _t4 := Time.get_ticks_usec()
 	projectiles.update(dt, self)
 	_regiment_post(dt)
-	if PROF:
-		print("hash %d pre %d slots %d soldiers %d post %d" % [_t1 - _t0, _t2 - _t1, _t3 - _t2, _t4 - _t3, Time.get_ticks_usec() - _t4])
+	var _t5 := Time.get_ticks_usec()
+	_prof_add(0, _t1 - _t0); _prof_add(1, _t2 - _t1); _prof_add(2, _t3 - _t2)
+	_prof_add(3, _t4 - _t3); _prof_add(4, _t5 - _t4); _prof_add(5, _t5 - _t0)
 	if tick_count % 15 == 0:
 		_check_victory()
 	# expire gun fx
@@ -559,6 +587,14 @@ func _regiment_pre(dt: float) -> void:
 			_r_flee[r.id] = fd.normalized()
 			continue
 		r.tick_orders(dt)
+		# per-tick caches read by every soldier of the regiment
+		r.c_speed_mult = MoraleRules.fatigue_speed_mult(r)
+		r.c_target = r.target()
+		r.c_ranged = r.is_ranged()
+		if r.c_ranged and r.fire_target != null:
+			r.c_fire_reach = effective_range(r, r.fire_target) + r.fire_target.depth() * 0.5
+		else:
+			r.c_fire_reach = -1.0
 		_r_anchor_vel[r.id] = (r.centre - _r_prev_centre[r.id]) / dt
 		_r_prev_centre[r.id] = r.centre
 		if r.engaged > 0 and not r.was_engaged and time - r.last_contact_emit > 2.0:
@@ -677,8 +713,8 @@ func _compute_slots() -> void:
 func _soldiers(dt: float) -> void:
 	var W := map_size.x
 	var H := map_size.y
-	var phase := tick_count % 3
-	var sep_phase := tick_count % 2
+	var phase := tick_count % 4
+	var sep_phase := tick_count % 3
 	for i in n:
 		var st := state[i]
 		if st >= DEAD:
@@ -691,7 +727,7 @@ func _soldiers(dt: float) -> void:
 		var ut := utype[i]
 		var p := pos[i]
 		var v := vel[i]
-		var run_s := T_RUN[ut] * MoraleRules.fatigue_speed_mult(r)
+		var run_s := T_RUN[ut] * r.c_speed_mult
 		var walk_s := T_WALK[ut]
 		var rad := T_RAD[ut]
 		flash[i] = maxf(0.0, flash[i] - dt)
@@ -739,7 +775,7 @@ func _soldiers(dt: float) -> void:
 				var ts := state[t]
 				if ts >= DEAD or p.distance_squared_to(pos[t]) > 140.0 * 140.0:
 					t = -1
-			if t < 0 and (i % 3) == phase and r.nearest_enemy_dist < 260.0:
+			if t < 0 and (i % 4) == phase and r.nearest_enemy_dist < 260.0:
 				t = _find_enemy(i, p, _seek_radius(r, ut), r)
 			target[i] = t
 			if t >= 0:
@@ -776,7 +812,7 @@ func _soldiers(dt: float) -> void:
 					var ft := r.fire_target
 					if ft.alive > 0 and not ft.withdrawn:
 						var tdist := p.distance_to(ft.mean_pos)
-						if tdist <= effective_range(r, ft) + ft.depth() * 0.5:
+						if tdist <= r.c_fire_reach:
 							if pending[i] == -1 and cooldown[i] <= 0.0 and p.distance_squared_to(slot_pos[i]) < 100.0:
 								st = SHOOT
 								action_t[i] = 0.0
@@ -812,7 +848,7 @@ func _soldiers(dt: float) -> void:
 		# --- separation (recomputed on alternate ticks)
 		if not r.crowded and t < 0 and st != ROUT:
 			sep[i] = Vector2.ZERO
-		elif (i & 1) == sep_phase:
+		elif (i % 3) == sep_phase:
 			var s := Vector2.ZERO
 			var c := _query(p, 26.0)
 			var mi := T_MASS[ut]
@@ -877,11 +913,11 @@ func _soldiers(dt: float) -> void:
 
 
 func _seek_radius(r: Regiment, ut: int) -> float:
-	if r.is_ranged():
+	if r.c_ranged:
 		return 38.0
 	if r.charging:
 		return 95.0 if T_MOUNT[ut] == 1 else 70.0
-	if r.engaged > 0 or r.target() != null:
+	if r.engaged > 0 or r.c_target != null:
 		return 70.0
 	return 42.0
 
@@ -891,7 +927,7 @@ func _find_enemy(i: int, p: Vector2, radius: float, r: Regiment) -> int:
 	var best := -1
 	var best_d := radius * radius
 	var my_team := team_of[i]
-	var tgt := r.target()
+	var tgt := r.c_target
 	var tgt_id := tgt.id if tgt != null else -1
 	for q in c:
 		var j := _nb[q]

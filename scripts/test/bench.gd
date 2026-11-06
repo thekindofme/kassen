@@ -55,6 +55,7 @@ func _run() -> void:
 		print("ran %d ticks, t=%.0fs alive %d+%d" % [only, sim.time, sim.men_alive(0), sim.men_alive(1)])
 		quit()
 		return
+	sim.prof_reset()
 	for ph in phases:
 		var ticks: int = ph[1]
 		var tot := 0
@@ -72,6 +73,8 @@ func _run() -> void:
 				var t1 := Time.get_ticks_usec()
 				renderer.update_now()
 				rtot += Time.get_ticks_usec() - t1
+		print("   sections: " + sim.prof_report())
+		sim.prof_reset()
 		var engaged := 0
 		for r in sim.regiments:
 			engaged += r.engaged
