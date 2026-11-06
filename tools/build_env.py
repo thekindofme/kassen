@@ -119,6 +119,9 @@ PROPS = {
 }
 
 
+PROP_MERGE = {"camp": 6}  # weapon rack sits close under the maku enclosure
+
+
 def cutouts(rgb, alpha, merge_px, min_frac=0.01):
     """Group keyed pixels into objects: dilate by merge_px, label, return list of (mask, bbox) in reading order."""
     solid = alpha > 0.5
@@ -182,7 +185,7 @@ def props():
     review = []
     for sheet, (kind, tallest) in PROPS.items():
         rgb, alpha = key_magenta(load_rgb(os.path.join(RAW, f"prop_{sheet}.png")))
-        objs, alpha = cutouts(rgb, alpha, merge_px=24)
+        objs, alpha = cutouts(rgb, alpha, merge_px=PROP_MERGE.get(sheet, 24))
         hmax = max(b[1] - b[0] for _, b in objs)
         s = tallest * PROP_SCALE / hmax
         for i, (m, bb) in enumerate(objs):
@@ -228,7 +231,7 @@ def fx():
     # linear key: FX are semi-transparent over magenta -> alpha = 1 - magentaness, colour un-mixed
     c, a = key_magenta(rgb, lo=0.0, hi=1.0)
     a = np.clip((a - 0.06) / 0.94, 0, 1)
-    objs, a = cutouts(c, a, merge_px=28, min_frac=0.05)
+    objs, a = cutouts(c, a, merge_px=12, min_frac=0.05)
     counts = {}
     meta = {}
     review = []
@@ -239,7 +242,7 @@ def fx():
         r, g, b = col
         if r > 0.8 and g > 0.5:
             kind = "flash"
-        elif r > 2.2 * g and g < 0.3:
+        elif r > 2.0 * g and r > 1.8 * b:
             kind = "blood"
         elif abs(r - b) < 0.08 and r > 0.55:
             kind = "smoke"

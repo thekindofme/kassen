@@ -49,7 +49,7 @@ general_attack: 8 frames OK
 general_death: 8 frames OK
   general_idle: factor 0.645  world height median 64.0 max 77.9
   general_walk: factor 0.784  world height median 55.3 max 62.2
-  general_attack: factor 0.608  world height median 63.3 max 69.3
+  general_attack: factor 0.685  world height median 63.0 max 65.8
   general_death: factor 0.742  world height median 51.1 max 57.4
 general: idle length 52.6 world px
-atlas 4096x4096, used rows 2456
+atlas 4096x4096, used rows 2448
