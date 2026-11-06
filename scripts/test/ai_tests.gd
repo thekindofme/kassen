@@ -116,7 +116,17 @@ func run_scenario(name: String, diff: String, seed_value: int) -> void:
 			else:
 				p0.update()
 		m.sample()
+		if OS.get_cmdline_user_args().has("--trace") and sim.tick_count % 300 < 3:
+			var line := "   t=%.0f" % sim.time
+			for r in sim.regiments:
+				line += " %d%s%d@%d,%d%s" % [r.team, r.type_key.substr(0, 2), r.alive, int(r.mean_pos.x), int(r.mean_pos.y), "*" if r.is_engaged() else ("R" if r.is_routing() else "")]
+			print(line)
+		if sim.tick_count % 900 < 3:
+			print("  .. t=%.0f wall %.1f s  men %d vs %d  posture %s" % [sim.time, (Time.get_ticks_msec() - t0) / 1000.0, sim.men_alive(0, false), sim.men_alive(1, false), AIGeneral.POSTURE_NAMES[ai.posture]])
 	var wall := (Time.get_ticks_msec() - t0) / 1000.0
+	won = sim.winner
+	for r in sim.regiments:
+		print("    T%d %-20s %2d/%2d %s" % [r.team, r.display_name, r.alive, r.initial_men, r.morale_name()])
 	m.report(won, wall)
 	# --- checks ----------------------------------------------------------------------
 	check(sim.ended, "battle resolves within %.0f s sim (ended at %.0f s)" % [MAX_T, sim.time])

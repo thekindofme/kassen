@@ -58,6 +58,12 @@ var high_ground := Vector2.INF
 var crossing := false              # the river lies between us and the enemy
 var contact := false               # lines are close
 var general_withdrawn := false
+## ATTACK sub-phase: "approach" (dress the line and close to bow range), "soften" (line halts
+## out of reach while the archers shoot), "assault" (every line regiment charges together).
+var phase := "approach"
+var phase_since := 0.0
+var line_ready := true             # every free line regiment is near its slot
+var _stand_reached := false
 
 # --- per-regiment state (keyed by regiment id) ---------------------------------------
 var _next_think := {}              # id -> sim time of its next micro think
@@ -198,6 +204,18 @@ func _blocked(a: Vector2, b: Vector2) -> bool:
 	return sim.terrain != null and sim.terrain.segment_blocked(a, b)
 
 
+## True if the straight path a→b crosses the river (deep water or the ford itself).
+func _river_between(a: Vector2, b: Vector2) -> bool:
+	if sim.terrain == null:
+		return false
+	var steps := int(a.distance_to(b) / 16.0) + 1
+	for s in steps + 1:
+		var p := a.lerp(b, float(s) / steps)
+		if sim.terrain.is_water(p) or sim.terrain.is_ford(p):
+			return true
+	return false
+
+
 func _water(p: Vector2) -> bool:
 	return sim.terrain != null and sim.terrain.is_water(p)
 
@@ -241,7 +259,7 @@ func _strategy() -> void:
 	ranged_ratio = (my_r + 10.0) / (en_r + 10.0)
 	my_com = _com(mine)
 	enemy_com = _com(enemies)
-	crossing = ford != Vector2.INF and _blocked(my_com, enemy_com)
+	crossing = ford != Vector2.INF and _river_between(my_com, enemy_com)
 	var gap := my_com.distance_to(enemy_com)
 	contact = gap < 520.0
 	var eff := strength_ratio * _cfg("aggression")
@@ -258,7 +276,7 @@ func _strategy() -> void:
 	elif eff < 0.8:
 		want = Posture.DEFEND
 		why = "outmatched"
-	elif ranged_ratio > 1.4 and eff < 1.6:
+	elif ranged_ratio > 1.4 and eff < 1.6 and not (posture == Posture.ATTACK and phase != "approach"):
 		want = Posture.SKIRMISH
 		why = "missile advantage"
 	else:
@@ -297,7 +315,49 @@ func _strategy() -> void:
 		g.order_withdraw()
 		_log("battle lost (strength %.2f): the general withdraws" % strength_ratio)
 
+	_update_phase(mine, gap)
 	_plan_line(mine, enemies)
+
+
+func _set_phase(p: String, why: String) -> void:
+	if p == phase:
+		return
+	_log("attack phase %s -> %s (%s)" % [phase, p, why])
+	phase = p
+	phase_since = sim.time
+
+
+func _update_phase(mine: Array[Regiment], gap: float) -> void:
+	line_ready = true
+	var my_missiles := 0
+	for r in mine:
+		var sl: Dictionary = _line_slots.get(r.id, {})
+		if sl.is_empty() or sl["role"] != "line" or r.is_engaged():
+			continue
+		if r.mean_pos.distance_to(sl["pos"]) > 130.0:
+			line_ready = false
+	for r in mine:
+		if r.is_ranged():
+			my_missiles += r.alive
+	if posture != Posture.ATTACK:
+		_set_phase("approach", "posture %s" % POSTURE_NAMES[posture])
+		return
+	if all_out:
+		_set_phase("assault", "all-out")
+		return
+	var soften_t := 30.0 / _cfg("aggression")
+	match phase:
+		"approach":
+			if gap < 330.0:
+				_set_phase("assault", "enemy closed in")
+			elif _stand_reached and line_ready and not crossing:
+				if my_missiles < 20 or ranged_ratio < 0.75:
+					_set_phase("assault", "no missile edge to soften with")
+				else:
+					_set_phase("soften", "line formed at bow range")
+		"soften":
+			if sim.time - phase_since > soften_t or my_missiles < 20 or gap < 330.0:
+				_set_phase("assault", "softened for %.0f s" % (sim.time - phase_since))
 
 
 # =====================================================================================
@@ -332,15 +392,23 @@ func _plan_line(mine: Array[Regiment], enemies: Array[Regiment]) -> void:
 			bow_range = m.get_range()
 	match posture:
 		Posture.ATTACK:
-			if crossing and _blocked(cur_line, enemy_com):
+			if crossing and _river_between(cur_line, enemy_com):
 				# bridgehead: cross at the ford and form up on the far bank
 				var far: Vector2 = nf[1]
 				fwd = (enemy_com - far).normalized()
 				anchor = far + fwd * 320.0
 			else:
-				var stand := enemy_com - fwd * 200.0
-				var adv := minf(cur_line.distance_to(stand), 320.0)
-				anchor = cur_line + (stand - cur_line).normalized() * adv if adv > 1.0 else cur_line
+				var standoff := 160.0 if phase == "assault" else bow_range * 0.88 + 110.0
+				var stand := enemy_com - fwd * standoff
+				var rem := cur_line.distance_to(stand)
+				_stand_reached = rem < 120.0
+				if not line_ready and phase != "assault" and line_anchor != Vector2.ZERO \
+						and not _river_between(cur_line, line_anchor):
+					anchor = line_anchor   # wait for stragglers: dress the line first
+					fwd = line_fwd
+				else:
+					var adv := minf(rem, 320.0)
+					anchor = cur_line + (stand - cur_line).normalized() * adv if adv > 1.0 else cur_line
 		Posture.DEFEND, Posture.SKIRMISH:
 			if crossing and ford != Vector2.INF:
 				# hold the river line: our bank, facing the ford
@@ -457,6 +525,10 @@ func _micro_line(r: Regiment, slot: Dictionary) -> void:
 				stats["braces"] += 1
 			return
 	var engage := _cfg("engage") * (1.8 if all_out else 1.0)
+	if posture == Posture.ATTACK and phase == "assault":
+		engage = maxf(engage, 520.0)
+	elif posture == Posture.ATTACK:
+		engage = 140.0
 	if posture != Posture.ATTACK:
 		engage = 140.0   # hold the line, only meet whoever comes to us
 	var cur := r.target()
@@ -552,7 +624,7 @@ func _micro_missile(r: Regiment, slot: Dictionary) -> void:
 	if r.is_engaged():
 		return
 	# melee lines are about to meet: retire behind our line
-	var line_close := threat != null and td < 480.0
+	var line_close := threat != null and (td < 300.0 or (td < 420.0 and closing > 25.0))
 	if line_close and posture == Posture.ATTACK:
 		_move_to(r, slot["back"], slot["fwd"], false, Color(0.6, 0.6, 1))
 		return
@@ -566,6 +638,8 @@ func _micro_missile(r: Regiment, slot: Dictionary) -> void:
 		if d < tgt_d:
 			tgt_d = d
 			tgt = e
+	if tgt != null:
+		rng_r = sim.effective_range(r, tgt)   # height changes reach
 	if tgt != null and tgt_d < rng_r * 1.35 and (posture != Posture.DEFEND or tgt_d < rng_r):
 		var want := rng_r * 0.88
 		if absf(tgt_d - want) < 70.0 or tgt_d < want:
@@ -659,7 +733,11 @@ func _micro_cav(r: Regiment, slot: Dictionary) -> void:
 			var to_t := tgt.mean_pos - r.mean_pos
 			var aspect := tgt.facing.dot(to_t.normalized())
 			if r.is_idle() or aspect > -0.2 or sim.time - float(c["t"]) > 12.0:
-				_charge(r, c, tgt)
+				if aspect < -0.35 and not tgt.is_ranged() and not tgt.is_routing():
+					c["s"] = CavState.WING   # never got round its flank: don't hit the front
+					c["target"] = null
+				else:
+					_charge(r, c, tgt)
 		CavState.CHARGE:
 			var done: bool = tgt == null or tgt.alive <= 0 or tgt.withdrawn or tgt.state == Regiment.Morale.SHATTERED \
 				or (r.target() == null and not r.is_engaged())
