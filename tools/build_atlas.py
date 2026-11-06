@@ -27,7 +27,7 @@ ANIMS = {"yari": ["idle", "walk", "attack", "death"], "yumi": ["idle", "walk", "
          "teppo": ["idle", "walk", "fire", "death"], "samurai": ["idle", "walk", "attack", "death"],
          "cavalry": ["idle", "walk", "attack", "death"], "general": ["idle", "walk", "attack", "death"]}
 # target figure height in world px (feet -> top of head/helmet; mounted: hooves -> rider helmet)
-TARGET_H = {"yari": 44, "yumi": 44, "teppo": 44, "samurai": 46, "cavalry": 64, "general": 64}
+TARGET_H = {"yari": 44, "yumi": 44, "teppo": 44, "samurai": 46, "cavalry": 77, "general": 78}
 MOUNTED = {"cavalry", "general"}
 FIRE_FRAME = {"teppo": {"fire": 3}, "yumi": {"shoot": 4}}  # shot/release frame (0-based), see QA.md
 

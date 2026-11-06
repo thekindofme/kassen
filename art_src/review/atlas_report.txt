@@ -3,7 +3,7 @@ yari_walk: 8 frames OK
 yari_attack: 8 frames OK
 yari_death: 8 frames OK
   yari_idle: factor 0.306  world height median 44.0 max 45.6
-  yari_walk: factor 0.356  world height median 31.8 max 32.4
+  yari_walk: factor 0.345  world height median 38.8 max 39.1
   yari_attack: factor 0.507  world height median 36.6 max 41.3
   yari_death: factor 0.382  world height median 31.9 max 43.0
 yari: idle length 15.6 world px
@@ -38,18 +38,18 @@ cavalry_idle: 8 frames OK
 cavalry_walk: 8 frames OK
 cavalry_attack: 8 frames only 7 body comps -> column cuts
 cavalry_death: 8 frames merged-bodies
-  cavalry_idle: factor 0.753  world height median 64.0 max 64.5
-  cavalry_walk: factor 0.993  world height median 53.8 max 57.6
-  cavalry_attack: factor 0.763  world height median 68.4 max 71.5
-  cavalry_death: factor 0.797  world height median 50.2 max 73.3
-cavalry: idle length 56.0 world px
+  cavalry_idle: factor 0.906  world height median 77.0 max 77.6
+  cavalry_walk: factor 1.195  world height median 64.7 max 69.3
+  cavalry_attack: factor 0.918  world height median 82.3 max 86.0
+  cavalry_death: factor 0.959  world height median 60.4 max 88.2
+cavalry: idle length 67.3 world px
 general_idle: 8 frames OK
 general_walk: 8 frames OK
 general_attack: 8 frames OK
 general_death: 8 frames OK
-  general_idle: factor 0.645  world height median 64.0 max 77.9
-  general_walk: factor 0.784  world height median 55.3 max 62.2
-  general_attack: factor 0.685  world height median 63.0 max 65.8
-  general_death: factor 0.742  world height median 51.1 max 57.4
-general: idle length 52.6 world px
-atlas 4096x4096, used rows 2448
+  general_idle: factor 0.787  world height median 78.0 max 94.9
+  general_walk: factor 0.956  world height median 67.4 max 75.8
+  general_attack: factor 0.835  world height median 76.8 max 80.2
+  general_death: factor 0.904  world height median 62.2 max 69.9
+general: idle length 64.1 world px
+atlas 4096x4096, used rows 3144
