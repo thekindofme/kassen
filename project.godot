@@ -12,6 +12,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]
 
+Offscreen="*res://scripts/dev/offscreen.gd"
 Game="*res://scripts/ui/game_flow.gd"
 
 [display]
