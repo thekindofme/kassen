@@ -83,6 +83,11 @@ func _ready() -> void:
 	camera.snap()
 	commander.camera = camera
 
+	var fx := BattleFX.new()   # VFX + weather/post (scripts/fx); ground decals insert above Terrain
+	fx.name = "BattleFX"
+	add_child(fx)
+	fx.setup(sim, terrain, camera)
+
 	ai = AIGeneral.new()
 	ai.name = "EnemyAI"
 	ai.sim = sim
