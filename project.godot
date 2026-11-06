@@ -14,6 +14,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 
 Offscreen="*res://scripts/dev/offscreen.gd"
 Game="*res://scripts/ui/game_flow.gd"
+E2E="*res://scripts/test/e2e_runner.gd"
 
 [display]
 

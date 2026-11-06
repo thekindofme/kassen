@@ -1035,10 +1035,10 @@ func _charge(i: int, t: int, r: Regiment, spd: float, dir: Vector2) -> void:
 	var dmg2 := (T_DMG[ut] + T_CHG[ut] * ratio * 0.7) * rng.randf_range(0.85, 1.2)
 	dmg2 *= 100.0 / (100.0 + T_ARM[vt])
 	var impulse := minf(170.0, T_MASS[ut] * ratio * 110.0 / T_MASS[vt])
-	if aspect == 2:
-		vr.morale -= T_CHG[ut] * ratio * 0.12
-	else:
-		vr.morale -= T_CHG[ut] * ratio * 0.05
+	# morale shock scales with the impact's weight relative to the victim regiment's size, so a
+	# heavy cavalry charge terrifies while an infantry rush only shakes (rear hits double)
+	var shock := T_CHG[ut] * ratio * T_MASS[ut] * 0.6 / maxf(10.0, float(vr.initial_men))
+	vr.morale -= shock * (2.0 if aspect == 2 else 1.0)
 	vel[t] = vel[t] + dir * impulse
 	stagger[t] = maxf(stagger[t], 0.4 + 0.35 * ratio)
 	# shove nearby enemies of the victim
