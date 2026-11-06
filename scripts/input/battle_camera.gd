@@ -25,6 +25,9 @@ func _ready() -> void:
 	target_zoom = zoom.x
 	if DisplayServer.get_name() == "headless":
 		edge_pan = false
+	var off := get_node_or_null("/root/Offscreen")
+	if off != null and off.active:
+		edge_pan = false   # 1x1 offscreen window: the real mouse is always "outside" it
 
 
 func focus_on(world: Vector2, z := -1.0) -> void:
