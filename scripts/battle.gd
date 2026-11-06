@@ -15,7 +15,7 @@ var sim: BattleSim
 var renderer: SoldierRenderer
 var commander: Commander
 var camera: BattleCamera
-var ai: PlaceholderAI
+var ai: AIGeneral
 var ai_player: PlaceholderAI
 var trees: Node2D
 var hud_label: Label
@@ -71,13 +71,20 @@ func _ready() -> void:
 	add_child(camera)
 	camera.make_current()
 	var own := sim.regiments_of(0)
-	var start := map.deploy_zones[0].get_center() + Vector2(500, 0)
+	# start over the player's army, close enough to read individual soldiers
+	var start := map.deploy_zones[0].get_center()
+	if not own.is_empty():
+		start = Vector2.ZERO
+		for r in own:
+			start += r.mean_pos
+		start /= own.size()
+		start += sim.home_dir(0) * -120.0
 	camera.position = start
-	camera.focus_on(start, 0.6)
+	camera.focus_on(start, 1.15)
 	camera.snap()
 	commander.camera = camera
 
-	ai = PlaceholderAI.new()
+	ai = AIGeneral.new()
 	ai.name = "EnemyAI"
 	ai.sim = sim
 	ai.team = 1

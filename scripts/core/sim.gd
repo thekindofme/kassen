@@ -643,6 +643,7 @@ func _soldiers(dt: float) -> void:
 				and v == Vector2.ZERO and _r_anchor_vel[r.id] == Vector2.ZERO and r.fire_target == null \
 				and p.distance_squared_to(slot_pos[i]) < 0.64:
 			anim_t[i] += dt * 6.0
+			flash[i] = 0.0
 			state[i] = IDLE
 			target[i] = -1
 			_r_sum[r.id] += p
@@ -950,6 +951,7 @@ func damage(t: int, dmg: float, src: Regiment) -> void:
 func _kill(t: int, src: Regiment) -> void:
 	state[t] = DEAD
 	dead_t[t] = 0.0
+	flash[t] = 0.0
 	target[t] = -1
 	pending[t] = -1
 	vel[t] = vel[t] * 0.2

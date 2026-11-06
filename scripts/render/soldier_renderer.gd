@@ -219,7 +219,7 @@ func update_now() -> void:
 			sel = pulse
 		elif r == hover_reg:
 			sel = 0.3
-		_buf[o + 8] = clampf(flash[i] / 0.14, 0.0, 1.0)
+		_buf[o + 8] = clampf(flash[i] / 0.14, 0.0, 1.0) * 0.7 if st < BattleSim.DEAD else 0.0
 		_buf[o + 9] = sel
 		_buf[o + 10] = 0.8 if st == BattleSim.ROUT else 1.0
 		_buf[o + 11] = 1.0
