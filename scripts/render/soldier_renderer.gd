@@ -27,6 +27,8 @@ var _buf := PackedFloat32Array()      # living: 16 floats/instance
 var _sbuf := PackedFloat32Array()     # shadows: 8 floats/instance
 var _rbuf := PackedFloat32Array()     # rings: 12 floats/instance
 var _corpse_done := PackedByteArray()
+var _vscale := PackedFloat32Array()
+var _vbright := PackedFloat32Array()
 var _corpse_n := 0
 var _cap := 0
 var last_update_ms := 0.0
@@ -104,6 +106,14 @@ func _ensure_capacity() -> void:
 	_corpse_done.resize(_cap)
 	_corpse_done.fill(0)
 	_buf.resize(_cap * 16)
+	# stable per-soldier variation: ±4% scale, slight brightness/tint jitter
+	_vscale.resize(_cap)
+	_vbright.resize(_cap)
+	for i in _cap:
+		var h1 := float((i * 2654435761) % 1000) / 1000.0
+		var h2 := float((i * 40503 + 977) % 1000) / 1000.0
+		_vscale[i] = 0.96 + 0.08 * h1
+		_vbright[i] = 0.93 + 0.1 * h2
 	_sbuf.resize(_cap * 8)
 	_rbuf.resize(_cap * 12)
 
@@ -199,10 +209,11 @@ func update_now() -> void:
 		var p := ppos[i].lerp(spos[i], a)
 		var spd := vel[i].length()
 		var fi := _frame_for(i, ut, tm, st, spd, action_t, dead_t, anim_t, actlen, a_start, a_count) * 8
-		var w := fr[fi + 4]
-		var h := fr[fi + 5]
-		var ax := fr[fi + 6]
-		var ay := fr[fi + 7]
+		var vs := _vscale[i]
+		var w := fr[fi + 4] * vs
+		var h := fr[fi + 5] * vs
+		var ax := fr[fi + 6] * vs
+		var ay := fr[fi + 7] * vs
 		var fl := facev[i]
 		var o := k * 16
 		_buf[o] = w * fl
@@ -221,7 +232,7 @@ func update_now() -> void:
 			sel = 0.3
 		_buf[o + 8] = clampf(flash[i] / 0.14, 0.0, 1.0) * 0.7 if st < BattleSim.DEAD else 0.0
 		_buf[o + 9] = sel
-		_buf[o + 10] = 0.8 if st == BattleSim.ROUT else 1.0
+		_buf[o + 10] = _vbright[i] * (0.8 if st == BattleSim.ROUT else 1.0)
 		_buf[o + 11] = 1.0
 		_buf[o + 12] = fr[fi]
 		_buf[o + 13] = fr[fi + 1]
@@ -283,16 +294,17 @@ func _add_corpse(i: int) -> void:
 	var si := UnitAtlas.slot_index(ut, tm, UnitTypes.ANIM_DEATH)
 	var fi := (atlas.anim_start[si] + atlas.anim_count[si] - 1) * 8
 	var fr := atlas.frames
-	var w := fr[fi + 4]
-	var h := fr[fi + 5]
+	var vs := _vscale[i]
+	var w := fr[fi + 4] * vs
+	var h := fr[fi + 5] * vs
 	var fl := sim.face[i]
 	var p := sim.pos[i]
 	var mm := mm_corpse.multimesh
 	var k := _corpse_n
 	if k >= mm.instance_count:
 		return
-	mm.set_instance_transform_2d(k, Transform2D(Vector2(w * fl, 0), Vector2(0, h), Vector2(p.x - fr[fi + 6] * fl, p.y - fr[fi + 7])))
-	mm.set_instance_color(k, Color(0, 0, 0.8, 1))
+	mm.set_instance_transform_2d(k, Transform2D(Vector2(w * fl, 0), Vector2(0, h), Vector2(p.x - fr[fi + 6] * vs * fl, p.y - fr[fi + 7] * vs)))
+	mm.set_instance_color(k, Color(0, 0, 0.8 * _vbright[i], 1))
 	mm.set_instance_custom_data(k, Color(fr[fi], fr[fi + 1], fr[fi + 2], fr[fi + 3]))
 	_corpse_n += 1
 	mm.visible_instance_count = _corpse_n

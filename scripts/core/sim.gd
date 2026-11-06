@@ -69,6 +69,7 @@ var slot_pos := PackedVector2Array()
 var hp := PackedFloat32Array()
 var face := PackedFloat32Array()        # +1 right, -1 left
 var anim_t := PackedFloat32Array()      # idle/walk phase (frames)
+var anim_rate := PackedFloat32Array()   # per-soldier animation speed variation (~±8%)
 var action_t := PackedFloat32Array()    # seconds since the last attack/shot began
 var dead_t := PackedFloat32Array()      # seconds since death
 var cooldown := PackedFloat32Array()
@@ -188,6 +189,7 @@ func spawn_regiment(type_key: String, team: int, centre: Vector2, p_facing := Ve
 		hp[i] = T_HP[t]
 		face[i] = 1.0 if r.facing.x >= 0.0 else -1.0
 		anim_t[i] = rng.randf() * 8.0
+		anim_rate[i] = rng.randf_range(0.92, 1.08)
 		action_t[i] = 99.0
 		dead_t[i] = 0.0
 		cooldown[i] = rng.randf() * maxf(T_INT[t], T_RELOAD[t] * 0.35)
@@ -215,7 +217,7 @@ func spawn_regiment(type_key: String, team: int, centre: Vector2, p_facing := Ve
 func _resize(m: int) -> void:
 	assert(m <= ID_MASK + 1, "too many soldiers for the hash key layout")
 	n = m
-	for a in ["pos", "prev_pos", "vel", "sep", "slot_pos", "hp", "face", "anim_t", "action_t", "dead_t",
+	for a in ["pos", "prev_pos", "vel", "sep", "slot_pos", "hp", "face", "anim_t", "anim_rate", "action_t", "dead_t",
 			"cooldown", "stagger", "flash", "reg_of", "team_of", "utype", "state", "target", "slot", "pending", "charge_ready"]:
 		var arr = get(a)
 		arr.resize(m)
@@ -395,6 +397,10 @@ func _speed_at(p: Vector2) -> float:
 
 func begin_deployment() -> void:
 	deploying = true
+	# snap every regiment fully inside its zone
+	for r in regiments:
+		if r.team < deploy_zones.size() and deploy_zones[r.team].size != Vector2.ZERO:
+			deploy_place(r, r.centre, r.facing)
 	_rebuild_hash()
 	deployment_started.emit()
 
@@ -713,6 +719,10 @@ func _compute_slots() -> void:
 func _soldiers(dt: float) -> void:
 	var W := map_size.x
 	var H := map_size.y
+	var tsp := _t_speed
+	var tw := _t_w
+	var th := _t_h
+	var tinv := 1.0 / _t_cell
 	var phase := tick_count % 4
 	var sep_phase := tick_count % 3
 	for i in n:
@@ -745,7 +755,7 @@ func _soldiers(dt: float) -> void:
 		if st <= MOVE and stg <= 0.0 and pending[i] == -1 and not r.crowded and r.nearest_enemy_dist > 220.0 \
 				and v == Vector2.ZERO and _r_anchor_vel[r.id] == Vector2.ZERO and r.fire_target == null \
 				and p.distance_squared_to(slot_pos[i]) < 0.64:
-			anim_t[i] += dt * 6.0
+			anim_t[i] += dt * 6.0 * anim_rate[i]
 			flash[i] = 0.0
 			state[i] = IDLE
 			target[i] = -1
@@ -874,20 +884,15 @@ func _soldiers(dt: float) -> void:
 			v = v.move_toward(Vector2.ZERO, 260.0 * dt)
 		else:
 			v = v.move_toward(desired, accel * dt)
-		var mult := _speed_at(p)
-		var np := p + v * dt * maxf(mult, 0.05)
-		if _speed_at(np) <= 0.0:
-			var nx := Vector2(np.x, p.y)
-			var ny := Vector2(p.x, np.y)
-			if _speed_at(nx) > 0.0:
-				np = nx
-				v.y *= 0.3
-			elif _speed_at(ny) > 0.0:
-				np = ny
-				v.x *= 0.3
-			else:
-				np = p
-				v *= 0.3
+		var np := p
+		if tw > 0:
+			var mult := tsp[clampi(int(p.y * tinv), 0, th - 1) * tw + clampi(int(p.x * tinv), 0, tw - 1)]
+			np = p + v * dt * maxf(mult, 0.05)
+			if tsp[clampi(int(np.y * tinv), 0, th - 1) * tw + clampi(int(np.x * tinv), 0, tw - 1)] <= 0.0:
+				np = _slide(p, np, v)
+				v = _slide_v
+		else:
+			np = p + v * dt
 		np.x = clampf(np.x, 2.0, W - 2.0)
 		np.y = clampf(np.y, 2.0, H - 2.0)
 		pos[i] = np
@@ -903,13 +908,29 @@ func _soldiers(dt: float) -> void:
 			face[i] = 1.0 if v.x > 0.0 else -1.0
 		# animation phase
 		if spd2 > 6.0:
-			anim_t[i] += dt * 10.0 * clampf(spd2 / walk_s, 0.6, 2.4)
+			anim_t[i] += dt * 10.0 * clampf(spd2 / walk_s, 0.6, 2.4) * anim_rate[i]
 		else:
-			anim_t[i] += dt * 6.0
+			anim_t[i] += dt * 6.0 * anim_rate[i]
 		state[i] = st
 		_r_sum[r.id] += np
 		_r_cnt[r.id] += 1
 		_r_spd[r.id] += spd2
+
+
+var _slide_v := Vector2.ZERO
+
+## Blocked by deep water: slide along whichever axis is free (sets _slide_v).
+func _slide(p: Vector2, np: Vector2, v: Vector2) -> Vector2:
+	var nx := Vector2(np.x, p.y)
+	var ny := Vector2(p.x, np.y)
+	if _speed_at(nx) > 0.0:
+		_slide_v = Vector2(v.x, v.y * 0.3)
+		return nx
+	if _speed_at(ny) > 0.0:
+		_slide_v = Vector2(v.x * 0.3, v.y)
+		return ny
+	_slide_v = v * 0.3
+	return p
 
 
 func _seek_radius(r: Regiment, ut: int) -> float:
@@ -1054,6 +1075,7 @@ func damage(t: int, dmg: float, src: Regiment) -> void:
 func _kill(t: int, src: Regiment) -> void:
 	state[t] = DEAD
 	dead_t[t] = 0.0
+	face[t] = 1.0 if rng.randf() < 0.5 else -1.0   # fall either way; corpses face randomly
 	flash[t] = 0.0
 	target[t] = -1
 	pending[t] = -1

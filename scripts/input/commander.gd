@@ -444,9 +444,10 @@ func _draw() -> void:
 		return
 	if sim.deploying and team < sim.deploy_zones.size():
 		var z: Rect2 = sim.deploy_zones[team]
-		draw_rect(z, Color(0.83, 0.64, 0.24, 0.08), true)
-		draw_rect(z.grow(-3.0), Color(0.83, 0.64, 0.24, 0.25), false, 6.0)
-		draw_rect(z, Color(0.95, 0.78, 0.38, 0.85), false, 2.0)
+		var inv_zoom := 1.0 / maxf(get_canvas_transform().get_scale().x, 0.05)
+		draw_rect(z, Color(0.83, 0.64, 0.24, 0.13), true)
+		draw_rect(z.grow(-5.0 * inv_zoom), Color(0.83, 0.64, 0.24, 0.3), false, 8.0 * inv_zoom)
+		draw_rect(z, Color(0.98, 0.82, 0.42, 0.95), false, 2.5 * inv_zoom)
 	var col_ghost := Color(1.0, 0.86, 0.45, 0.55)
 	for e in _ghost:
 		var r: Regiment = e["reg"]
