@@ -1,0 +1,52 @@
+{
+ "smoke_0": {
+  "w": 124,
+  "h": 106,
+  "kind": "smoke"
+ },
+ "smoke_1": {
+  "w": 118,
+  "h": 93,
+  "kind": "smoke"
+ },
+ "smoke_2": {
+  "w": 132,
+  "h": 98,
+  "kind": "smoke"
+ },
+ "smoke_3": {
+  "w": 129,
+  "h": 78,
+  "kind": "smoke"
+ },
+ "blood_0": {
+  "w": 144,
+  "h": 113,
+  "kind": "blood"
+ },
+ "blood_1": {
+  "w": 126,
+  "h": 79,
+  "kind": "blood"
+ },
+ "blood_2": {
+  "w": 113,
+  "h": 110,
+  "kind": "blood"
+ },
+ "blood_3": {
+  "w": 140,
+  "h": 104,
+  "kind": "blood"
+ },
+ "flash_0": {
+  "w": 202,
+  "h": 102,
+  "kind": "flash"
+ },
+ "flash_1": {
+  "w": 198,
+  "h": 114,
+  "kind": "flash"
+ }
+}

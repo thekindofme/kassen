@@ -41,3 +41,13 @@ props bushes: 8 objects, factor 0.227
 fx: {'smoke': 4, 'blood': 6, 'flash': 2}
 fx: {'smoke': 4, 'dropped_dust': 3, 'blood': 3, 'flash': 2}
 fx: {'smoke': 4, 'dropped_dust': 2, 'blood': 4, 'flash': 2}
+props pines: 4 objects, factor 0.640
+props maples: 4 objects, factor 0.598
+props bamboo: 3 objects, factor 0.527
+props rocks: 6 objects, factor 0.269
+props houses: 3 objects, factor 0.628
+props shrine: 4 objects, factor 0.448
+props fences: 4 objects, factor 0.252
+props camp: 5 objects, factor 0.296
+props bushes: 8 objects, factor 0.227
+fx: {'smoke': 4, 'dropped_dust': 3, 'blood': 4, 'flash': 2}

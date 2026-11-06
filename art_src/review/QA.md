@@ -63,10 +63,10 @@ All textures share a luma std of ~0.075 so splat blends don't pop. Review: `terr
 
 ### Props (`assets/props/<sheet>_<n>.png`, props.json, stored at 2× world)
 All 9 sheets PASS: pines 4, maples 4, bamboo 3, rocks 6, houses 3, shrine 4 (shrine, torii, 2 lanterns),
-fences 4 (rail fence, bamboo palisade, haystack, cart), camp 4 (maku enclosure, weapon rack + taiko drum were split,
-nobori ×2), bushes 8. Tallest-item world heights: pines 160, maples 150, bamboo 150, houses 170, shrine 150,
-camp 140, rocks 64, fences 58, bushes 34. Note: camp sheet gives 5 objects in the source; check `props_contact.jpg`
-(rack and drum may be one cut-out). Bamboo clumps have faint pink tips on leaf edges at 100% zoom.
+fences 4 (rail fence, bamboo palisade, haystack, cart), camp 5 (maku enclosure, weapon rack, taiko drum,
+nobori ×2; camp needed a tighter merge distance so the rack splits from the maku), bushes 8. Tallest-item world heights: pines 160, maples 150, bamboo 150, houses 170, shrine 150,
+camp 140, rocks 64, fences 58, bushes 34. 
+Bamboo clumps have faint pink tips on leaf edges at 100% zoom.
 
 ### FX (`assets/fx/`, fx.json)
 fx_sheet: blood ×4 and muzzle flash ×2 PASS (linear un-mix key). Smoke ×4 keyed cleanly (neutral grey) and are
