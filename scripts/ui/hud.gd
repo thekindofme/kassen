@@ -125,12 +125,19 @@ func bind(p_sim: BattleSim, p_commander: Commander = null, p_camera: Camera2D = 
 	var g := get_node_or_null("/root/Game")
 	if g != null:
 		g.apply_settings()
-	# deployment phase: the sim stays paused until Begin Battle (unless a tool run skips it)
-	var skip := Game_user_arg("shot") or Game_user_arg("demo") or Game_user_arg("skip_deploy")
-	if sim.time <= 0.0 and not skip:
-		_enter_deploy()
+	# deployment phase: follow sim.deploying when the sim has one (engine-driven deployment);
+	# otherwise fall back to holding the sim paused until Begin Battle.
+	if _sim_has_deploy():
+		if bool(sim.get("deploying")):
+			_enter_deploy()
+		else:
+			deploy_banner.visible = false
 	else:
-		deploy_banner.visible = false
+		var skip := Game_user_arg("shot") or Game_user_arg("demo") or Game_user_arg("skip_deploy")
+		if sim.time <= 0.0 and not skip:
+			_enter_deploy()
+		else:
+			deploy_banner.visible = false
 	_intro_anim()
 
 
@@ -141,12 +148,13 @@ static func Game_user_arg(k: String) -> bool:
 	return false
 
 
+func _sim_has_deploy() -> bool:
+	return sim != null and sim.get("deploying") != null
+
+
 func _enter_deploy() -> void:
 	deploying = true
-	var dep = sim.get("deploying")
-	if dep != null:
-		sim.set("deploying", true)
-	else:
+	if not _sim_has_deploy():
 		sim.paused = true
 	deploy_banner.visible = true
 	UiKit.fade_in(deploy_banner, 0.6, 0.4)
@@ -159,9 +167,8 @@ func begin_battle() -> void:
 	deploying = false
 	if sim.has_method("begin_battle"):
 		sim.call("begin_battle")
-	elif sim.get("deploying") != null:
-		sim.set("deploying", false)
-	sim.paused = false
+	if not _sim_has_deploy():
+		sim.paused = false
 	UiKit.sfx(self, "confirm")
 	UiKit.phase(self, "battle")
 	var t := create_tween()
@@ -179,8 +186,14 @@ func _process(_delta: float) -> void:
 	if sim == null:
 		return
 	_track_kills()
-	if deploying and not sim.paused and sim.get("deploying") == null:
-		begin_battle()            # unpaused by hotkey during deployment
+	if _sim_has_deploy():
+		var d := bool(sim.get("deploying"))
+		if d and not deploying:
+			_enter_deploy()               # (re)entered deployment
+		elif deploying and not d:
+			begin_battle()                # ended elsewhere (Enter key, tests, AI demo)
+	elif deploying and not sim.paused:
+		begin_battle()                    # unpaused by hotkey during deployment
 	timer_label.text = UiKit.fmt_time(sim.time)
 	# speed buttons reflect the sim (hotkeys can change it too)
 	speed_buttons[0].set_pressed_no_signal(sim.paused)
@@ -423,7 +436,7 @@ func _build_deploy_banner() -> void:
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_child(v)
 	v.add_child(UiKit.label("Deployment", "TitleLabel", 34))
-	var sub := UiKit.label("Draw up your lines. Right-drag to set frontage and facing; orders are carried out when battle begins.", "", 18, Color(UiKit.WASHI, 0.85))
+	var sub := UiKit.label("Drag your regiments into position within the crimson zone; right-drag sets frontage and facing. Enter begins the battle.", "", 18, Color(UiKit.WASHI, 0.85))
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sub.custom_minimum_size = Vector2(380, 0)
 	v.add_child(sub)
