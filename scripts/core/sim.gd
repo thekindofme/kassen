@@ -15,6 +15,7 @@ signal volley(pos: Vector2, kind: String)          # kind: "arrow" | "gun"
 signal charge_impact(pos: Vector2, strength: float)
 signal general_killed(team: int)
 signal battle_started()
+signal deployment_started()
 signal projectile_hit(pos: Vector2, kind: String)  # "arrow" (landed on a soldier) | "gun" (bullet hit)
 
 const TICK_HZ := 30
@@ -40,6 +41,11 @@ var time := 0.0
 var tick_count := 0
 var time_scale := 1.0
 var paused := false
+## Deployment phase: the clock is stopped and the player may place regiments inside
+## deploy_zones[team] (see deploy_place). begin_battle() ends it.
+var deploying := false
+var started := false
+var deploy_zones: Array[Rect2] = []
 var auto_run := true               # advance in _process (false for headless tests that call step())
 var alpha := 0.0                   # render interpolation factor in [0,1)
 var ended := false
@@ -388,8 +394,68 @@ func _speed_at(p: Vector2) -> float:
 #  Main loop
 # =====================================================================================
 
+func begin_deployment() -> void:
+	deploying = true
+	_rebuild_hash()
+	deployment_started.emit()
+
+
+## Ends deployment (Enter / the UI's "Begin Battle") and starts the clock.
+func begin_battle() -> void:
+	if started and not deploying:
+		return
+	deploying = false
+	if not started:
+		started = true
+		battle_started.emit()
+
+
+func set_speed(x: float) -> void:
+	time_scale = clampf(x, 0.25, 4.0)
+
+
+## Clamp a regiment centre so its whole block stays inside the team's deployment zone.
+func clamp_to_deploy_zone(team: int, c: Vector2, half_extent: Vector2) -> Vector2:
+	if team >= deploy_zones.size() or deploy_zones[team].size == Vector2.ZERO:
+		return c
+	var z := deploy_zones[team]
+	var lo := z.position + half_extent
+	var hi := z.end - half_extent
+	return Vector2(clampf(c.x, lo.x, maxf(lo.x, hi.x)), clampf(c.y, lo.y, maxf(lo.y, hi.y)))
+
+
+## Deployment: instantly place a regiment (clamped to its zone), soldiers exactly on their slots.
+func deploy_place(r: Regiment, c: Vector2, fwd: Vector2, p_files := 0) -> void:
+	if p_files > 0:
+		r.files = clampi(p_files, 1, maxi(1, r.alive))
+	if fwd.length_squared() > 0.01:
+		r.facing = fwd.normalized()
+	var ext := (Vector2(-r.facing.y, r.facing.x) * r.width() * 0.5).abs() + (r.facing * r.depth() * 0.5).abs() + Vector2(14, 14)
+	c = clamp_to_deploy_zone(r.team, c, ext)
+	r.orders.clear()
+	r.centre = c
+	r.dest_centre = c
+	r.dest_facing = r.facing
+	r.dest_files = r.files
+	r.mean_pos = c
+	r.assign_slots(c, r.facing, r.files)
+	var f := r._eff_files()
+	for i in r.soldiers:
+		if state[i] >= DEAD:
+			continue
+		var p := c + Regiment.slot_offset(slot[i], r.slot_n, f, r.facing, r.spacing)
+		pos[i] = p
+		prev_pos[i] = p
+		slot_pos[i] = p
+		vel[i] = Vector2.ZERO
+		face[i] = 1.0 if r.facing.x >= 0.0 else -1.0
+	if r.id < _r_prev_centre.size():
+		_r_prev_centre[r.id] = c
+	_rebuild_hash()
+
+
 func _process(delta: float) -> void:
-	if not auto_run or paused:
+	if not auto_run or paused or deploying:
 		return
 	_acc += minf(delta, 0.1) * time_scale
 	var steps := 0
@@ -411,7 +477,8 @@ func step(ticks := 1) -> void:
 
 func _tick() -> void:
 	var dt := DT
-	if tick_count == 0:
+	if not started:
+		started = true
 		battle_started.emit()
 	time += dt
 	tick_count += 1

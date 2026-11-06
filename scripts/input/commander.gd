@@ -39,6 +39,7 @@ var _rmb_drag := false
 var _ghost: Array = []           # [{reg, centre, facing, files}]
 var _last_recall := {"n": -1, "t": 0}
 var _box_layer: Node2D
+var _drag_regs: Array = []       # deployment drag: [{reg, off, home, facing}]
 
 
 func _ready() -> void:
@@ -74,16 +75,24 @@ func _mouse_button(mb: InputEventMouseButton) -> void:
 			_lmb_start = mb.position
 			_lmb_cur = mb.position
 			_box = false
+			_drag_regs.clear()
+			if sim.deploying and not mb.double_click:
+				var under := sim.regiment_at(_world(mb.position), team)
+				if under != null and under.selected:
+					# deployment: drag the selected regiments around the zone
+					for r in selected:
+						_drag_regs.append({"reg": r, "off": r.centre - _world(mb.position), "home": r.centre, "facing": r.facing})
 			if mb.double_click:
 				var r := sim.regiment_at(_world(mb.position), team)
 				if r != null:
 					_select([r], false)
-					if camera != null:
-						camera.focus_on(r.mean_pos)
+					focus_regiment(r)
 				_lmb_down = false
 		elif _lmb_down:
 			_lmb_down = false
-			if _box:
+			if not _drag_regs.is_empty():
+				_finish_deploy_drag(_world(mb.position))
+			elif _box:
 				var a := _world(_lmb_start)
 				var b := _world(mb.position)
 				var rect := Rect2(a, Vector2.ZERO).expand(b)
@@ -116,7 +125,15 @@ func _mouse_button(mb: InputEventMouseButton) -> void:
 
 
 func _mouse_motion(mm: InputEventMouseMotion) -> void:
-	if _lmb_down:
+	if _lmb_down and not _drag_regs.is_empty():
+		_lmb_cur = mm.position
+		if _lmb_cur.distance_to(_lmb_start) > DRAG_PX * 0.5:
+			var w := _world(mm.position)
+			for e in _drag_regs:
+				var r: Regiment = e["reg"]
+				sim.deploy_place(r, w + e["off"], r.facing)
+			queue_redraw()
+	elif _lmb_down:
 		_lmb_cur = mm.position
 		if not _box and _lmb_cur.distance_to(_lmb_start) > DRAG_PX:
 			_box = true
@@ -134,28 +151,18 @@ func _mouse_motion(mm: InputEventMouseMotion) -> void:
 
 
 func _key(ev: InputEvent) -> void:
-	if ev.is_action_pressed("cmd_run"):
-		var all_run := true
-		for r in selected:
-			all_run = all_run and r.running
-		for r in selected:
-			r.set_running(not all_run)
-		order_issued.emit("run")
+	if ev.is_action_pressed("begin_battle"):
+		if sim.deploying:
+			sim.begin_battle()
+			queue_redraw()
+	elif ev.is_action_pressed("cmd_run"):
+		cmd_toggle_run()
 	elif ev.is_action_pressed("cmd_fire_at_will"):
-		var all_on := true
-		for r in selected:
-			all_on = all_on and r.fire_at_will
-		for r in selected:
-			r.set_fire_at_will(not all_on)
-		order_issued.emit("fire_at_will")
+		cmd_toggle_fire()
 	elif ev.is_action_pressed("cmd_halt"):
-		for r in selected:
-			r.order_halt()
-		order_issued.emit("halt")
+		cmd_halt()
 	elif ev.is_action_pressed("cmd_withdraw"):
-		for r in selected:
-			r.order_withdraw()
-		order_issued.emit("withdraw")
+		cmd_withdraw()
 	elif ev.is_action_pressed("cmd_group"):
 		_toggle_group()
 	elif ev.is_action_pressed("select_all", false, true):
@@ -193,6 +200,68 @@ func _key(ev: InputEvent) -> void:
 					camera.focus_on(_group_centre(live))
 				_last_recall = {"n": k, "t": now}
 				return
+
+
+## Deployment drag release: dropping a single regiment onto another of ours swaps them.
+func _finish_deploy_drag(w: Vector2) -> void:
+	if _drag_regs.size() == 1:
+		var dragged: Regiment = _drag_regs[0]["reg"]
+		for o in sim.regiments_of(team):
+			if o == dragged or o.is_out():
+				continue
+			var half := Vector2(o.width(), o.depth()) * 0.5 + Vector2(12, 12)
+			var rel := w - o.centre
+			var local := Vector2(rel.dot(Vector2(-o.facing.y, o.facing.x)), rel.dot(o.facing))
+			if absf(local.x) < half.x and absf(local.y) < half.y:
+				var oc := o.centre
+				var of := o.facing
+				sim.deploy_place(o, _drag_regs[0]["home"], _drag_regs[0]["facing"])
+				sim.deploy_place(dragged, oc, of)
+				break
+	_drag_regs.clear()
+	order_issued.emit("deploy")
+	queue_redraw()
+
+
+# ---- order API for UI buttons (act on the current selection) ---------------------------
+
+func cmd_toggle_run() -> void:
+	var all_run := true
+	for r in selected:
+		all_run = all_run and r.running
+	for r in selected:
+		r.set_running(not all_run)
+	order_issued.emit("run")
+
+
+func cmd_toggle_fire() -> void:
+	var all_on := true
+	for r in selected:
+		all_on = all_on and r.fire_at_will
+	for r in selected:
+		r.set_fire_at_will(not all_on)
+	order_issued.emit("fire_at_will")
+
+
+func cmd_halt() -> void:
+	if sim.deploying:
+		return
+	for r in selected:
+		r.order_halt()
+	order_issued.emit("halt")
+
+
+func cmd_withdraw() -> void:
+	if sim.deploying:
+		return
+	for r in selected:
+		r.order_withdraw()
+	order_issued.emit("withdraw")
+
+
+func focus_regiment(r: Regiment) -> void:
+	if camera != null and r != null:
+		camera.focus_on(r.mean_pos)
 
 
 func _change_speed(d: int) -> void:
@@ -255,8 +324,8 @@ func _select(regs: Array, add: bool) -> void:
 	selection_changed.emit(selected)
 
 
-func select_regiments(regs: Array, add := false) -> void:
-	_select(regs, add)
+func select_regiments(list: Array, additive := false) -> void:
+	_select(list, additive)
 
 
 # =====================================================================================
@@ -269,7 +338,7 @@ func _right_click(screen: Vector2, run: bool, queue: bool) -> void:
 		return
 	var w := _world(screen)
 	var enemy := sim.regiment_at(w)
-	if enemy != null and enemy.team != team and not enemy.is_out():
+	if enemy != null and enemy.team != team and not enemy.is_out() and not sim.deploying:
 		for r in selected:
 			r.order_attack(enemy, run or r.running, queue)
 		order_issued.emit("attack")
@@ -346,6 +415,13 @@ func _layout_line(a: Vector2, b: Vector2, fwd := Vector2.ZERO, front_on_line := 
 
 
 func _issue_layout(layout: Array, run: bool, queue: bool) -> void:
+	if sim.deploying:
+		for e in layout:
+			sim.deploy_place(e["reg"], e["centre"], e["facing"], e["files"])
+		if not layout.is_empty():
+			order_issued.emit("deploy")
+		queue_redraw()
+		return
 	for e in layout:
 		var r: Regiment = e["reg"]
 		r.order_move(e["centre"], e["facing"], e["files"], run or r.running, queue)
@@ -359,13 +435,18 @@ func _issue_layout(layout: Array, run: bool, queue: bool) -> void:
 # =====================================================================================
 
 func _process(_d: float) -> void:
-	if not selected.is_empty() or not _ghost.is_empty():
+	if not selected.is_empty() or not _ghost.is_empty() or (sim != null and sim.deploying):
 		queue_redraw()
 
 
 func _draw() -> void:
 	if sim == null:
 		return
+	if sim.deploying and team < sim.deploy_zones.size():
+		var z: Rect2 = sim.deploy_zones[team]
+		draw_rect(z, Color(0.83, 0.64, 0.24, 0.08), true)
+		draw_rect(z.grow(-3.0), Color(0.83, 0.64, 0.24, 0.25), false, 6.0)
+		draw_rect(z, Color(0.95, 0.78, 0.38, 0.85), false, 2.0)
 	var col_ghost := Color(1.0, 0.86, 0.45, 0.55)
 	for e in _ghost:
 		var r: Regiment = e["reg"]

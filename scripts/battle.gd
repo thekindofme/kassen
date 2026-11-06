@@ -3,7 +3,7 @@ extends Node2D
 ## spawns both armies from the map definition, and shows a minimal debug HUD.
 ##
 ## User args (after `--`):
-##   --map=kurogawa  --seed=N  --demo (AI plays both sides)  --speed=X
+##   --map=kurogawa  --seed=N  --demo (AI plays both sides)  --speed=X  --skip_deploy
 ##   --shot=path.png [--shot_frames=N] [--shot_sim=SECONDS] [--cam=x,y,zoom]
 ##       fast-forward SECONDS of simulation, wait N rendered frames, save a screenshot and quit.
 
@@ -47,6 +47,7 @@ func _ready() -> void:
 	for team in 2:
 		for e in map.armies[team]:
 			sim.spawn_regiment(e["type"], team, e["pos"], e["facing"])
+	sim.deploy_zones = map.deploy_zones
 
 	commander = Commander.new()
 	commander.name = "Commander"
@@ -99,6 +100,11 @@ func _ready() -> void:
 		sim.time_scale = float(args["speed"])
 
 	_build_hud()
+	# Deployment phase (GDD §3): clock frozen until Enter / "Begin Battle" calls sim.begin_battle().
+	if args.has("shot") or args.has("demo") or args.has("skip_deploy"):
+		sim.begin_battle()
+	else:
+		sim.begin_deployment()
 	sim.battle_ended.connect(_on_battle_ended)
 
 	if args.has("shot"):
@@ -171,7 +177,7 @@ func _process(_delta: float) -> void:
 			sel += "\n  %s  %d men  morale %d (%s)  fatigue %d%%%s%s" % [r.display_name, r.alive, int(r.morale), r.morale_name(),
 				int(r.fatigue * 100), "  RUN" if r.running else "", "" if r.fire_at_will or not r.is_ranged() else "  HOLD FIRE"]
 		hud_label.text = "KASSEN — %s   %s x%.1f   t=%ds\nHino %d   Mizuno %d   fps %d  render %.2f ms%s" % [
-			map.title, "PAUSED " if sim.paused else "", sim.time_scale, int(sim.time),
+			map.title, "DEPLOYMENT (Enter = begin battle) " if sim.deploying else ("PAUSED " if sim.paused else ""), sim.time_scale, int(sim.time),
 			sim.men_alive(0, false), sim.men_alive(1, false), Engine.get_frames_per_second(), renderer.last_update_ms, sel]
 	if _shot_pending and _frames >= int(args.get("shot_frames", 90)):
 		_shot_pending = false

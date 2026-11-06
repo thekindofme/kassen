@@ -196,7 +196,10 @@ func is_engaged() -> bool:
 
 
 func is_moving() -> bool:
-	return not orders.is_empty() and _anchor_moving
+	## True while the formation anchor travels or the men are still walking into place.
+	if is_broken():
+		return false
+	return _anchor_moving or avg_speed > speed_walk() * 0.35
 
 
 func is_idle() -> bool:
@@ -435,7 +438,8 @@ func move_speed() -> float:
 func tick_orders(dt: float) -> void:
 	_anchor_moving = false
 	_slot_timer += dt
-	if slots_dirty and _slot_timer > 0.5 and engaged == 0:
+	# casualty refill: at most every ~0.5 s, staggered by id so regiments don't all re-sort at once
+	if slots_dirty and _slot_timer > 0.5 and engaged == 0 and (sim.tick_count + id) % 8 == 0:
 		assign_slots(centre, facing, _eff_files())
 	if is_broken() or withdrawn:
 		return
@@ -490,6 +494,7 @@ func _tick_move(dt: float) -> void:
 	if dist <= step:
 		centre = to
 		route_i += 1
+		_anchor_moving = true
 		if route_i >= route.size():
 			_arrive()
 	else:

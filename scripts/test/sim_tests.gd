@@ -28,7 +28,7 @@ func _run_all() -> void:
 		"test_formation_move", "test_formation_reface_and_frontage", "test_no_jitter_at_rest",
 		"test_melee_resolution", "test_rout_and_rally", "test_charge_vs_braced",
 		"test_arrows_hit", "test_guns_volley", "test_victory", "test_determinism",
-		"test_kurogawa_ford_route", "test_commander_input",
+		"test_kurogawa_ford_route", "test_commander_input", "test_deployment",
 	]
 	var only := ""
 	for a in OS.get_cmdline_user_args():
@@ -110,10 +110,12 @@ func test_formation_move() -> void:
 	var r := s.spawn_regiment("yari", 0, Vector2(500, 1000), Vector2.RIGHT)
 	r.order_move(Vector2(1100, 1000))
 	seconds(s, 5.0)
+	check(r.is_moving(), "is_moving() while marching")
 	var moved := r.centre.x - 500.0
 	check(moved > 120.0 and moved < 200.0, "walks at ~34 px/s (moved %.0f px in 5 s)" % moved)
 	check(slot_error(s, r) < r.spacing.x * 1.2, "keeps formation while marching (err %.1f)" % slot_error(s, r))
 	seconds(s, 25.0)
+	check(not r.is_moving(), "not moving after arrival")
 	check(r.is_idle(), "move order completed")
 	check(r.mean_pos.distance_to(Vector2(1100, 1000)) < 6.0, "arrived at destination (%s)" % r.mean_pos)
 	check(slot_error(s, r) < 2.0, "settled into slots (err %.2f)" % slot_error(s, r))
@@ -459,3 +461,45 @@ func test_commander_input() -> void:
 	cmd.queue_free()
 	free_sim(s)
 	own2 = null
+
+
+func test_deployment() -> void:
+	var s := new_sim(11)
+	var cmd := Commander.new()
+	cmd.sim = s
+	root.add_child(cmd)
+	s.deploy_zones = [Rect2(100, 100, 600, 800), Rect2(1500, 100, 600, 800)]
+	var a := s.spawn_regiment("yari", 0, Vector2(300, 300), Vector2.RIGHT)
+	var b := s.spawn_regiment("samurai", 0, Vector2(300, 700), Vector2.RIGHT)
+	var started := [0]
+	s.battle_started.connect(func(): started[0] += 1)
+	s.begin_deployment()
+	check(s.deploying, "deploying after begin_deployment")
+	s.auto_run = true
+	s._process(1.0)
+	check(s.tick_count == 0, "clock frozen during deployment")
+	cmd.select_regiments([a])
+	# RMB far outside the zone: placed instantly, clamped inside
+	_mouse(MOUSE_BUTTON_RIGHT, true, Vector2(1200, 400))
+	_mouse(MOUSE_BUTTON_RIGHT, false, Vector2(1200, 400))
+	var inside := true
+	for i in a.soldiers:
+		inside = inside and s.deploy_zones[0].has_point(s.pos[i])
+	check(inside and a.centre.x > 500.0, "deploy placement clamped to the zone (centre %s)" % a.centre)
+	check(a.is_idle() and s.vel[a.soldiers[0]] == Vector2.ZERO, "placement is instant (no march)")
+	# LMB-drag the selected regiment onto the other one: swap
+	var ca := a.centre
+	var cb := b.centre
+	var grab := s.pos[a.leader] - Vector2(0, 18)
+	_mouse(MOUSE_BUTTON_LEFT, true, grab)
+	_motion(grab + Vector2(-50, 100), Vector2(-50, 100), MOUSE_BUTTON_MASK_LEFT)
+	_motion(cb, cb - grab, MOUSE_BUTTON_MASK_LEFT)
+	_mouse(MOUSE_BUTTON_LEFT, false, cb)
+	check(a.centre.distance_to(cb) < 30.0 and b.centre.distance_to(ca) < 30.0, "drop on a friendly regiment swaps them (a %s b %s)" % [a.centre, b.centre])
+	_keypress(KEY_ENTER)
+	check(not s.deploying and started[0] == 1, "Enter begins the battle (battle_started emitted)")
+	s._process(0.2)
+	check(s.tick_count > 0, "clock runs after begin_battle")
+	s.auto_run = false
+	cmd.queue_free()
+	free_sim(s)
