@@ -77,8 +77,16 @@ func _build_logo() -> void:
 	_logo.position = Vector2(140, 150)
 	_logo.size = Vector2(900, 330)
 	add_child(_logo)
+	var shadow := TextureRect.new()
+	shadow.texture = UiKit.tex("glow")
+	shadow.position = Vector2(818, 0)
+	shadow.size = Vector2(212, 212)
+	shadow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shadow.modulate = Color(0, 0, 0, 0.75)
+	_logo.add_child(shadow)
 	var seal := TextureRect.new()
 	seal.texture = UiKit.tex("seal_stamp")
+	seal.self_modulate = Color(0.85, 0.85, 0.85)
 	seal.position = Vector2(858, 40)
 	seal.size = Vector2(132, 132)
 	seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

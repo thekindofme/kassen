@@ -36,7 +36,7 @@ func _ready() -> void:
 	var strip := PanelContainer.new()
 	strip.name = "Scroll"
 	strip.theme_type_variation = &"WashiPanel"
-	strip.position = Vector2(220, 640)
+	strip.position = Vector2(220, 590)
 	strip.custom_minimum_size = Vector2(1480, 0)
 	add_child(strip)
 	var m := MarginContainer.new()
@@ -76,13 +76,13 @@ func _ready() -> void:
 	seal.texture = UiKit.tex("seal_stamp")
 	seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	seal.size = Vector2(120, 120)
-	seal.position = Vector2(1620, 548)
+	seal.position = Vector2(1620, 498)
 	seal.rotation = deg_to_rad(5)
 	seal.name = "Seal"
 	add_child(seal)
 	var kan := UiKit.label(String(sc.get("kanji", "")), "BrushLabel", 40 if String(sc.get("kanji", "")).length() <= 2 else 32, UiKit.WASHI)
 	kan.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
-	kan.position = Vector2(1632, 578)
+	kan.position = Vector2(1632, 528)
 	kan.rotation = deg_to_rad(5)
 	add_child(kan)
 	seal.modulate.a = 0.0
@@ -91,7 +91,7 @@ func _ready() -> void:
 	_continue = Button.new()
 	_continue.text = "Continue"
 	_continue.custom_minimum_size = Vector2(300, 66)
-	_continue.position = Vector2(1400, 990)
+	_continue.position = Vector2(1400, 994)
 	_continue.add_theme_font_size_override("font_size", 28)
 	_continue.pressed.connect(_on_continue)
 	_continue.mouse_entered.connect(func(): UiKit.sfx(self, "hover"))
@@ -101,7 +101,7 @@ func _ready() -> void:
 	var back := Button.new()
 	back.text = "Back"
 	back.custom_minimum_size = Vector2(200, 66)
-	back.position = Vector2(220, 990)
+	back.position = Vector2(220, 994)
 	back.pressed.connect(func():
 		UiKit.sfx(self, "back")
 		if g != null:
