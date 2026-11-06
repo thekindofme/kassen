@@ -29,6 +29,7 @@ var mat_grid := PackedByteArray()
 var speed_grid := PackedFloat32Array()
 var height_grid := PackedFloat32Array()
 var forest_grid := PackedFloat32Array()
+var ford_mask := PackedFloat32Array()   # 0..1 shallow-crossing mask for the shader (height_tex.a)
 var trees := PackedVector2Array()
 var tree_scale := PackedFloat32Array()
 
@@ -51,6 +52,7 @@ func build(p_map: MapDef) -> void:
 	forest_grid.resize(N); forest_grid.fill(0.0)
 	var w := PackedFloat32Array(); w.resize(N * 8); w.fill(0.0)
 	var water_depth := PackedFloat32Array(); water_depth.resize(N); water_depth.fill(0.0)
+	ford_mask.resize(N); ford_mask.fill(0.0)
 
 	var noise := FastNoiseLite.new()
 	noise.seed = map.seed_value
@@ -154,11 +156,14 @@ func build(p_map: MapDef) -> void:
 		var fa: Vector2 = fd["a"]
 		var fb: Vector2 = fd["b"]
 		var fw: float = fd["width"]
-		_stamp_polyline(PackedVector2Array([fa, fb]), fw * 0.5 + 20.0, func(k: int, d: float) -> void:
+		_stamp_polyline(PackedVector2Array([fa, fb]), fw * 0.5 + 60.0, func(k: int, d: float) -> void:
+			# ford mask (height_img alpha): 1 on the causeway centre line, 0 past the wet-sand fringe
+			ford_mask[k] = maxf(ford_mask[k], clampf((fw * 0.5 + 50.0 - d) / (fw * 0.5 + 50.0), 0.0, 1.0))
 			var e := clampf((fw * 0.5 - d) / 20.0, 0.0, 1.0)
-			if water_depth[k] > 0.0 and e > 0.0:
-				water_depth[k] = minf(water_depth[k], 1.0 - e * 0.6)
-				_set_w(w, k, 5, maxf(w[k * 8 + 5], e * 0.8))
+			var ev := clampf((fw * 0.5 + 30.0 - d) / 90.0, 0.0, 1.0)   # softer visual shoaling
+			if water_depth[k] > 0.0 and ev > 0.0:
+				water_depth[k] = minf(water_depth[k], 1.0 - ev * 0.72)
+				_set_w(w, k, 5, maxf(w[k * 8 + 5], ev * 0.6))
 				if mat_grid[k] == Mat.WATER and e > 0.5:
 					mat_grid[k] = Mat.FORD)
 
@@ -249,7 +254,7 @@ func _build_images(w: PackedFloat32Array, water_depth: PackedFloat32Array) -> vo
 		bh[k * 4 + 0] = int(clampf(height_grid[k] / 64.0, 0.0, 1.0) * 255.0)
 		bh[k * 4 + 1] = int(clampf(water_depth[k], 0.0, 1.0) * 255.0)
 		bh[k * 4 + 2] = int(clampf(forest_grid[k], 0.0, 1.0) * 255.0)
-		bh[k * 4 + 3] = 255
+		bh[k * 4 + 3] = int(clampf(ford_mask[k], 0.0, 1.0) * 255.0)
 	splat0 = Image.create_from_data(grid_w, grid_h, false, Image.FORMAT_RGBA8, b0)
 	splat1 = Image.create_from_data(grid_w, grid_h, false, Image.FORMAT_RGBA8, b1)
 	height_img = Image.create_from_data(grid_w, grid_h, false, Image.FORMAT_RGBA8, bh)
