@@ -5,3 +5,4 @@
 !README*
 !synth/
 !synth/*.py
+!.gdignore

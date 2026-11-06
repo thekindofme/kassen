@@ -48,7 +48,8 @@ deploy fades out over 0.02–0.22, battle takes over, and intense fades in over 
 | `warcry` | 5 | 14–22 layered CC0 yells plus crowd | `melee_contact`, `regiment_rallied`, battle start, charges |
 | `rout_cry` | 3 | sparse, higher, scattered yells | `regiment_routed` |
 | `kachidoki_01` | 1 | synthesised "Ei! Ei!" / "Oh!" ×3 with yell texture | victory (2.2 s after the stinger) |
-| `horagai` | 2 | synthesised conch: 01 near, 02 distant answer | battle start (`set_phase("battle")`), non-positional |
+| `horagai` | 1 | synthesised conch call, near | battle start (`set_phase("battle")`), non-positional |
+| `horagai_answer` | 1 | the same call, distant and darker | 4.2 s later: the enemy answers |
 | `march_loop` | 1 | loop (8 s), about 40 men stepping at 2 Hz with gear rattle | looping voices that follow moving infantry regiments (pitched up when running or routing) |
 | `melee_loop` | 2 | loop (12 s), crowd bed with dense clashes, impacts, grunts and yells | the "melee bed" voices, one per melee cluster, louder with engaged men |
 
