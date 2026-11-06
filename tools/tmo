@@ -1,0 +1,6 @@
+#!/usr/bin/perl
+# Usage: tools/tmo <seconds> <cmd...>  — run cmd, kill it (and exit 124) after <seconds>.
+my $s = shift; my $pid = fork();
+if ($pid == 0) { setpgrp(0,0); exec @ARGV or die "exec: $!"; }
+local $SIG{ALRM} = sub { kill 'KILL', -$pid; print STDERR "TIMEOUT after ${s}s: @ARGV\n"; exit 124; };
+alarm $s; waitpid($pid, 0); exit($? >> 8);
