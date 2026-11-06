@@ -92,6 +92,8 @@ func bind(p_sim: BattleSim, p_commander: Commander = null, p_camera: Camera2D = 
 	if map == null and sim != null and sim.terrain != null:
 		map = sim.terrain.get("map") as MapDef
 	_bound = true
+	if Game_user_arg("shot") and not Game_user_arg("hud"):
+		visible = false                   # engine render shots stay clean unless --hud is given
 	# the engine's debug overlay is replaced by this HUD
 	var dbg := get_parent().get_node_or_null("DebugHud") if get_parent() != null else null
 	if dbg != null and not Game_user_arg("debug_hud"):

@@ -286,3 +286,11 @@ static func user_args() -> Dictionary:
 			var kv := a.substr(2).split("=", true, 1)
 			out[kv[0]] = kv[1] if kv.size() > 1 else true
 	return out
+
+
+func _exit_tree() -> void:
+	if menu_audio != null and is_instance_valid(menu_audio):
+		for p in menu_audio.find_children("*", "AudioStreamPlayer", true, false):
+			p.stop()
+			p.stream = null
+	UiKit._cache.clear()   # release statically cached fonts/textures before engine shutdown
