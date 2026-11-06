@@ -3,7 +3,7 @@ extends Node2D
 ## spawns both armies from the map definition, and shows a minimal debug HUD.
 ##
 ## User args (after `--`):
-##   --map=kurogawa  --seed=N  --demo (AI plays both sides)  --speed=X  --skip_deploy  --deploy (keep deployment in --shot runs)
+##   --map=kurogawa (default: Game.map_key())  --difficulty=easy|normal|hard  --debug_hud  --seed=N  --demo (AI plays both sides)  --speed=X  --skip_deploy  --deploy (keep deployment in --shot runs)
 ##   --shot=path.png [--shot_frames=N] [--shot_sim=SECONDS] [--cam=x,y,zoom]
 ##       fast-forward SECONDS of simulation, wait N rendered frames, save a screenshot and quit.
 
@@ -27,7 +27,8 @@ var _shot_pending := false
 
 func _ready() -> void:
 	args = _parse_args()
-	var map_key: String = args.get("map", "kurogawa")
+	var game := get_node_or_null("/root/Game")
+	var map_key: String = args.get("map", game.map_key() if game != null else "kurogawa")
 	map = load(MAPS.get(map_key, MAPS["kurogawa"])).new()
 
 	terrain = Terrain.new()
@@ -92,6 +93,8 @@ func _ready() -> void:
 	ai.name = "EnemyAI"
 	ai.sim = sim
 	ai.team = 1
+	var diff_idx: int = int(game.difficulty) if game != null else 1
+	ai.difficulty = String(args.get("difficulty", ["easy", "normal", "hard"][clampi(diff_idx, 0, 2)]))
 	add_child(ai)
 	if args.has("demo"):
 		ai_player = PlaceholderAI.new()
@@ -143,6 +146,7 @@ func _parse_args() -> Dictionary:
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "DebugHud"
+	layer.visible = args.has("debug_hud")   # the real HUD (scenes/ui/hud.tscn) replaces it
 	add_child(layer)
 	hud_label = Label.new()
 	hud_label.position = Vector2(16, 12)

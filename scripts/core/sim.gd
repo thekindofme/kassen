@@ -1090,6 +1090,7 @@ func _kill(t: int, src: Regiment) -> void:
 	MoraleRules.on_casualty(r)
 	if src != null:
 		src.kills_recent += 1.0
+		src.kills += 1
 		stat_kills[src.team] += 1
 	if t == r.leader:
 		r.leader = -1

@@ -1,0 +1,32 @@
+#!/bin/bash
+# Record an E2E scenario to an H.264 mp4 (and a .log next to it).
+# Usage: tools/record.sh <scenario> <out.mp4> [extra user args...]
+#   e.g. tools/record.sh full_battle proof/e2e_full_battle.mp4
+# Runs through tools/render_run.sh (off-screen unless KASSEN_VISIBLE=1) with Godot's Movie Maker
+# (--write-movie, --fixed-fps 30: frame-perfect and deterministic, slower than real time), then
+# converts with ffmpeg (crf 20, yuv420p, faststart). Exit code: 0 if the log contains
+# "E2E RESULT PASS", 1 if the scenario failed, 2 if the recording/encode failed.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ $# -lt 2 ]; then echo "usage: $0 <scenario> <out.mp4> [extra user args]" >&2; exit 64; fi
+SCENARIO="$1"; OUT="$2"; shift 2
+case "$OUT" in /*) ;; *) OUT="$ROOT/$OUT" ;; esac
+mkdir -p "$(dirname "$OUT")"
+LOG="${OUT%.*}.log"
+TMPDIR_REC="$(mktemp -d -t kassen_rec)"
+AVI="$TMPDIR_REC/run.avi"
+BOOT="--battle"
+"$ROOT/tools/render_run.sh" --write-movie "$AVI" --fixed-fps 30 --resolution 1920x1080 \
+  -- $BOOT --e2e="$SCENARIO" "$@" 2>&1 | tee "$LOG"
+rc=1
+grep -q "E2E RESULT PASS" "$LOG" && rc=0
+if [ ! -s "$AVI" ]; then
+  echo "record.sh: no movie was written" >&2; rm -rf "$TMPDIR_REC"; exit 2
+fi
+if ! ffmpeg -y -v error -i "$AVI" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p \
+     -c:a aac -b:a 160k -movflags +faststart "$OUT"; then
+  echo "record.sh: ffmpeg encode failed" >&2; rm -rf "$TMPDIR_REC"; exit 2
+fi
+rm -rf "$TMPDIR_REC"
+echo "record.sh: wrote $OUT ($(du -h "$OUT" | cut -f1)), log $LOG, e2e exit $rc"
+exit $rc

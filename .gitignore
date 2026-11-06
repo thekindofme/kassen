@@ -3,3 +3,5 @@
 *.avi
 art_src/logs/
 art_src/test/
+proof/*.mp4
+proof/*.avi

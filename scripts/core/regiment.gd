@@ -100,6 +100,7 @@ var rout_time := 0.0
 var under_fire_t := 99.0
 var losses_recent := 0.0
 var kills_recent := 0.0
+var kills := 0                        # cumulative kills (HUD / results)
 var last_contact_emit := -99.0
 var last_volley_emit := -99.0
 var last_charge_emit := -99.0
