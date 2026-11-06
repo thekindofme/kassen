@@ -911,6 +911,8 @@ func _soldiers(dt: float) -> void:
 			anim_t[i] += dt * 10.0 * clampf(spd2 / walk_s, 0.6, 2.4) * anim_rate[i]
 		else:
 			anim_t[i] += dt * 6.0 * anim_rate[i]
+		if state[i] >= DEAD:
+			continue   # died during its own update (e.g. impaled charging braced spears)
 		state[i] = st
 		_r_sum[r.id] += np
 		_r_cnt[r.id] += 1
@@ -1073,6 +1075,8 @@ func damage(t: int, dmg: float, src: Regiment) -> void:
 
 
 func _kill(t: int, src: Regiment) -> void:
+	if state[t] >= DEAD:
+		return
 	state[t] = DEAD
 	dead_t[t] = 0.0
 	face[t] = 1.0 if rng.randf() < 0.5 else -1.0   # fall either way; corpses face randomly
@@ -1081,7 +1085,7 @@ func _kill(t: int, src: Regiment) -> void:
 	pending[t] = -1
 	vel[t] = vel[t] * 0.2
 	var r: Regiment = regiments[reg_of[t]]
-	r.alive -= 1
+	r.alive = maxi(0, r.alive - 1)
 	r.slots_dirty = true
 	MoraleRules.on_casualty(r)
 	if src != null:
@@ -1108,7 +1112,7 @@ func _on_general_killed(team: int) -> void:
 func _flee_off(i: int, r: Regiment) -> void:
 	state[i] = FLED
 	target[i] = -1
-	r.alive -= 1
+	r.alive = maxi(0, r.alive - 1)
 	r.slots_dirty = true
 
 
@@ -1324,6 +1328,21 @@ func _rally(r: Regiment) -> void:
 	regiment_rallied.emit(r)
 
 
+## Men still standing (not routing / shattered / withdrawn) and the team's starting strength.
+func team_strength(team: int) -> Vector2i:
+	var standing := 0
+	var initial := 0
+	for r in regiments:
+		if r.team != team:
+			continue
+		initial += r.initial_men
+		if not r.is_out() and not r.is_routing():
+			standing += r.alive
+	return Vector2i(standing, initial)
+
+
+## Public: true when the team has lost (TW rule: every regiment routing, shattered, withdrawn
+## or dead; or the general is dead and under 35% of the army still stands).
 func team_broken(team: int) -> bool:
 	var any := false
 	var standing := 0
@@ -1347,6 +1366,13 @@ func team_broken(team: int) -> bool:
 func _check_victory() -> void:
 	if ended:
 		return
+	# army-wide collapse: remnants under 15% of the starting army rout with the rest
+	for team in 2:
+		var st := team_strength(team)
+		if st.x > 0 and float(st.x) < float(st.y) * 0.15:
+			for r in regiments:
+				if r.team == team and not r.is_out() and not r.is_routing():
+					_rout(r)
 	var b0 := team_broken(0)
 	var b1 := team_broken(1)
 	if not b0 and not b1:

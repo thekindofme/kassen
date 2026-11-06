@@ -28,7 +28,7 @@ func _run_all() -> void:
 		"test_formation_move", "test_formation_reface_and_frontage", "test_no_jitter_at_rest",
 		"test_melee_resolution", "test_rout_and_rally", "test_charge_vs_braced",
 		"test_arrows_hit", "test_guns_volley", "test_victory", "test_determinism",
-		"test_kurogawa_ford_route", "test_commander_input", "test_deployment",
+		"test_kurogawa_ford_route", "test_commander_input", "test_deployment", "test_alive_never_negative", "test_army_collapse",
 	]
 	var only := ""
 	for a in OS.get_cmdline_user_args():
@@ -505,3 +505,48 @@ func test_deployment() -> void:
 	s.auto_run = false
 	cmd.queue_free()
 	free_sim(s)
+
+
+func test_alive_never_negative() -> void:
+	# cavalry hammering braced spears + archers shooting into the melee: many same-tick deaths
+	var s := new_sim(12)
+	var cav := s.spawn_regiment("cavalry", 0, Vector2(900, 1000), Vector2.RIGHT)
+	var cav2 := s.spawn_regiment("cavalry", 0, Vector2(900, 1200), Vector2.RIGHT)
+	var bows := s.spawn_regiment("yumi", 0, Vector2(800, 800), Vector2.RIGHT)
+	var yari := s.spawn_regiment("yari", 1, Vector2(1300, 1080), Vector2.LEFT)
+	var tep := s.spawn_regiment("teppo", 1, Vector2(1450, 1080), Vector2.LEFT)
+	cav.order_attack(yari)
+	cav2.order_attack(yari)
+	bows.order_attack(yari)
+	var ok := true
+	for k in 60:
+		seconds(s, 1.0)
+		for r in s.regiments:
+			var real := 0
+			for i in r.soldiers:
+				if s.state[i] < BattleSim.DEAD:
+					real += 1
+			if r.alive < 0 or r.alive != real:
+				ok = false
+	check(ok, "alive count always matches living soldiers and never goes negative")
+	free_sim(s)
+	tep = null
+
+
+func test_army_collapse() -> void:
+	var s := new_sim(13)
+	var a := s.spawn_regiment("yari", 0, Vector2(900, 1000), Vector2.RIGHT)
+	var b := s.spawn_regiment("yari", 1, Vector2(1500, 900), Vector2.LEFT)
+	var c := s.spawn_regiment("yari", 1, Vector2(1500, 1300), Vector2.LEFT)
+	var g := s.spawn_regiment("general", 1, Vector2(1700, 1100), Vector2.LEFT)
+	seconds(s, 0.5)
+	b.morale = 2.0
+	c.morale = 2.0
+	seconds(s, 2.0)
+	check(b.is_routing() and c.is_routing(), "line breaks")
+	# the general's 12 men are < 15% of 132: the remnant joins the rout and the battle ends
+	var t := until(s, 30.0, func(): return s.ended)
+	check(g.is_routing() or g.is_out(), "remnant routs with the army (%s)" % g.morale_name())
+	check(t > 0.0 and s.winner == 0 and s.team_broken(1), "battle ends for the player")
+	free_sim(s)
+	a = null
