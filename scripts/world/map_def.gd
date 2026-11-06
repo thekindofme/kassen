@@ -24,6 +24,8 @@ var hills: Array[Dictionary] = []
 var villages: Array[Rect2] = []
 var houses: Array[Vector2] = []
 var paddies: Array[Rect2] = []
+## Visual ground patches for the splat: {"c": Vector2, "r": float, "mat": "sand"|"dirt"|"mud"|..., "a": 0..1}.
+var ground_patches: Array[Dictionary] = []
 ## Deployment zone per team and the direction of each team's home edge (routing / withdraw).
 var deploy_zones: Array[Rect2] = [Rect2(), Rect2()]
 var home_dirs: Array = [Vector2.LEFT, Vector2.RIGHT]
@@ -31,6 +33,41 @@ var home_dirs: Array = [Vector2.LEFT, Vector2.RIGHT]
 var armies: Array = [[], []]
 ## Free-form hints for the AI general (e.g. key positions).
 var ai_hints: Dictionary = {}
+## Opening posture hint for the AI general: "attack", "defend", "skirmish" or "" (AI decides).
+var ai_posture_hint := ""
+
+## Explicit props (PropLayer): {"id": "houses_0" (props.json key), "pos": Vector2 foot point,
+## "s": scale (1.0), "flip": bool, "clan": 1 recolours Hino red cloth to Mizuno indigo, "b": brightness}.
+## Forest entries may also carry "kind" ("pine" | "maple" | "mixed" | "bamboo"), "density" and
+## "red" (share of red maples). Procedural dressing (bushes, rocks, field trees, reeds) is tuned
+## with `scatter` multipliers: bush, rock, field_tree, reeds, plus field_kind / red.
+var props: Array[Dictionary] = []
+var scatter: Dictionary = {}
+## Atmosphere read by the VFX layer: mist bank and time of day ("day" | "dawn" | "dusk").
+var mist := false
+var time_of_day := "day"
+
+
+## Catmull-Rom resample of a polyline (keeps the end points): smooth meanders from a few
+## control points. `sub` = segments per control span.
+static func smooth_path(ctrl: PackedVector2Array, sub := 6) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var n := ctrl.size()
+	if n < 3:
+		return ctrl
+	for i in n - 1:
+		var p0 := ctrl[maxi(i - 1, 0)]
+		var p1 := ctrl[i]
+		var p2 := ctrl[i + 1]
+		var p3 := ctrl[mini(i + 2, n - 1)]
+		for s in sub:
+			var t := float(s) / sub
+			var t2 := t * t
+			var t3 := t2 * t
+			out.append(0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+				+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3))
+	out.append(ctrl[n - 1])
+	return out
 
 
 ## Lays out a standard army inside `zone`, facing `fwd`. Line: cavalry wings, spears and

@@ -98,6 +98,19 @@ func build(p_map: MapDef) -> void:
 			if inside:
 				mat_grid[k] = Mat.VILLAGE)
 
+	# ground patches (visual only): soft noisy blobs of any splat material, e.g. sandy ford
+	# beaches, trampled camp dirt, mud at a crossing. {"c", "r", "mat": MATERIALS name, "a": 0..1}
+	for gp in map.ground_patches:
+		var gc: Vector2 = gp["c"]
+		var gr: float = gp["r"]
+		var ch := MATERIALS.find(gp.get("mat", "dirt"))
+		var ga: float = gp.get("a", 0.85)
+		_for_cells_in(Rect2(gc - Vector2(gr, gr) * 1.3, Vector2(gr, gr) * 2.6), func(k: int, p: Vector2) -> void:
+			var d := p.distance_to(gc) + noise2.get_noise_2d(p.x * 1.3, p.y * 1.3) * gr * 0.35
+			var e := clampf((gr - d) / (gr * 0.45), 0.0, 1.0) * ga
+			if ch >= 0 and e > w[k * 8 + ch]:
+				_set_w(w, k, ch, e))
+
 	# forests
 	for f in map.forests:
 		var fc: Vector2 = f["c"]

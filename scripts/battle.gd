@@ -7,7 +7,7 @@ extends Node2D
 ##   --shot=path.png [--shot_frames=N] [--shot_sim=SECONDS] [--cam=x,y,zoom]
 ##       fast-forward SECONDS of simulation, wait N rendered frames, save a screenshot and quit.
 
-const MAPS := {"kurogawa": "res://scripts/world/maps/kurogawa.gd"}
+const MAPS := {"kurogawa": "res://scripts/world/maps/kurogawa.gd", "tenmoku": "res://scripts/world/maps/tenmoku.gd"}
 
 var map: MapDef
 var terrain: Terrain
@@ -35,10 +35,10 @@ func _ready() -> void:
 	add_child(terrain)
 	terrain.build(map)
 
-	var village := _VillageLayer.new()
-	village.name = "Village"
-	village.map = map
-	add_child(village)
+	var props := PropLayer.new()   # contact shadows + low props, under the soldiers
+	props.name = "Props"
+	props.setup(map, terrain)
+	add_child(props)
 
 	sim = BattleSim.new()
 	sim.name = "BattleSim"
@@ -60,10 +60,8 @@ func _ready() -> void:
 	renderer.setup(sim)
 	commander.renderer = renderer
 
-	trees = _TreeLayer.new()
-	trees.name = "TreeCanopy"
-	trees.terrain = terrain
-	trees.sim = sim
+	props.sim = sim
+	trees = props.canopy   # trees, houses, shrine, camp: above the soldiers, fading over them
 	add_child(trees)
 
 	camera = BattleCamera.new()
