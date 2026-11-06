@@ -1,0 +1,5 @@
+.screen_lock
+.godot/
+*.avi
+art_src/logs/
+art_src/test/
