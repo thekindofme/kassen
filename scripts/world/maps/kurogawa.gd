@@ -34,7 +34,7 @@ func _init() -> void:
 		Vector2(2860, 2960), Vector2(2960, 3280)]), 6)
 	river_width = 120.0
 	fords = [
-		{"a": Vector2(2540, 1640), "b": Vector2(2790, 1650), "width": 230.0},   # the capital-road ford
+		{"a": Vector2(2540, 1640), "b": Vector2(2790, 1650), "width": 260.0},   # the capital-road ford
 		{"a": Vector2(2545, 385), "b": Vector2(2790, 400), "width": 140.0},     # hidden woodland ford
 	]
 
@@ -168,6 +168,6 @@ func _camp(c: Vector2, clan: int, flip: bool) -> void:
 	_p("camp_3", c + Vector2(-140 * sx, 60), 0.9, flip, clan)           # spear racks
 	_p("camp_3", c + Vector2(-110 * sx, 250), 0.9, not flip, clan)
 	for k in 5:   # nobori line facing the field
-		_p("camp_1", c + Vector2(170 * sx, -150 + k * 85), 0.85, flip, clan)
+		_p("camp_1", c + Vector2((170 + (k % 2) * 40) * sx, -200 + k * 120), 0.85, flip, clan)
 	_p("camp_2", c + Vector2(-120 * sx, -70), 0.9, flip, clan)
 	_p("camp_2", c + Vector2(-80 * sx, 300), 0.9, flip, clan)

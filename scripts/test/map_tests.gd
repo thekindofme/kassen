@@ -89,16 +89,21 @@ func run_map(key: String, ai_kind: String, seed_value: int) -> void:
 			for r in sim.regiments:
 				if contact_t < 0.0 and r.is_engaged():
 					contact_t = sim.time
-				if r.alive > 0 and not r.is_routing() and terrain.is_water(r.mean_pos):
-					wet += 1
-					if wet <= 5:
-						print("  wet: T%d %s at %s t=%.0f routing=%s" % [r.team, r.type_key, r.mean_pos, sim.time, r.is_routing()])
+				if r.alive > 0 and not r.is_routing():
+					var n_wet := 0
+					for i in r.soldiers:
+						if sim.hp[i] > 0.0 and terrain.is_water(sim.pos[i]):
+							n_wet += 1
+					if n_wet > 0:
+						wet += n_wet
+						if wet <= 12:
+							print("  wet: T%d %s %d men in deep water near %s t=%.0f" % [r.team, r.type_key, n_wet, r.mean_pos, sim.time])
 		if sim.tick_count % 1800 < 3:
 			print("  .. t=%.0f  men %d vs %d" % [sim.time, sim.men_alive(0, false), sim.men_alive(1, false)])
 	print("  ended=%s winner=%d t=%.0f s (wall %.1f s)  men %d vs %d" % [sim.ended, sim.winner, sim.time,
 		(Time.get_ticks_msec() - w0) / 1000.0, sim.men_alive(0, false), sim.men_alive(1, false)])
 	check(contact_t > 0.0, "armies reach each other (first melee at t=%.0f s)" % contact_t)
-	check(wet == 0, "no formed regiment centre in deep water (%d samples; routers ignored)" % wet)
+	check(wet == 0, "no formed soldiers in deep water (%d soldier-samples; routers ignored)" % wet)
 	check(sim.ended, "battle resolves within %.0f s (t=%.0f)" % [MAX_T, sim.time])
 	for ai in ais:
 		ai.queue_free()
