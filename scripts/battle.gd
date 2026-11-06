@@ -3,7 +3,7 @@ extends Node2D
 ## spawns both armies from the map definition, and shows a minimal debug HUD.
 ##
 ## User args (after `--`):
-##   --map=kurogawa  --seed=N  --demo (AI plays both sides)  --speed=X  --skip_deploy
+##   --map=kurogawa  --seed=N  --demo (AI plays both sides)  --speed=X  --skip_deploy  --deploy (keep deployment in --shot runs)
 ##   --shot=path.png [--shot_frames=N] [--shot_sim=SECONDS] [--cam=x,y,zoom]
 ##       fast-forward SECONDS of simulation, wait N rendered frames, save a screenshot and quit.
 
@@ -101,7 +101,7 @@ func _ready() -> void:
 
 	_build_hud()
 	# Deployment phase (GDD §3): clock frozen until Enter / "Begin Battle" calls sim.begin_battle().
-	if args.has("shot") or args.has("demo") or args.has("skip_deploy"):
+	if (args.has("shot") and not args.has("deploy")) or args.has("demo") or args.has("skip_deploy"):
 		sim.begin_battle()
 	else:
 		sim.begin_deployment()
