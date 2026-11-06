@@ -12,6 +12,8 @@ var _fails := 0
 var _passes := 0
 var _ran := false
 var _cur := ""
+var map_key := "kurogawa"
+var _rows: Array = []
 
 
 func _process(_d: float) -> bool:
@@ -25,8 +27,17 @@ func _process(_d: float) -> bool:
 	var which: String = args.get("scenario", "passive")
 	var diff: String = args.get("diff", "normal")
 	var list: Array = ["passive", "scripted", "ford", "aivai"] if which == "all" else Array(which.split(","))
-	for s in list:
-		run_scenario(s, diff, int(args.get("seed", "1574")))
+	map_key = args.get("map", "kurogawa")
+	var seeds: Array = Array(String(args.get("seeds", args.get("seed", "1574"))).split(","))
+	var diffs: Array = Array(diff.split(","))
+	for d in diffs:
+		for sd in seeds:
+			for s in list:
+				run_scenario(s, d, int(sd))
+	print("\n=== summary (map %s) ===" % map_key)
+	print("  scenario  diff    seed   winner  time   men P/AI")
+	for row in _rows:
+		print("  %-9s %-7s %-6d %-7s %4.0fs  %d/%d" % row)
 	print("\n%d checks passed, %d failed" % [_passes, _fails])
 	quit(1 if _fails > 0 else 0)
 	return false
@@ -67,8 +78,8 @@ class FordHolder:
 
 func run_scenario(name: String, diff: String, seed_value: int) -> void:
 	_cur = name
-	print("\n=== scenario: %s (difficulty %s, seed %d) ===" % [name, diff, seed_value])
-	var map: MapDef = load("res://scripts/world/maps/kurogawa.gd").new()
+	print("\n=== scenario: %s on %s (difficulty %s, seed %d) ===" % [name, map_key, diff, seed_value])
+	var map: MapDef = load("res://scripts/world/maps/%s.gd" % map_key).new()
 	var terrain := Terrain.new()
 	root.add_child(terrain)
 	terrain.build(map)
@@ -102,6 +113,14 @@ func run_scenario(name: String, diff: String, seed_value: int) -> void:
 			a0.verbose = true
 			root.add_child(a0)
 			p0 = a0
+	# deployment phase: the AI(s) lay out their line inside the zone, then the battle starts
+	sim.deploy_zones = map.deploy_zones
+	sim.begin_deployment()
+	ai.update()
+	if p0 is AIGeneral:
+		p0.update()
+	_check_deploy(sim, ai)
+	sim.begin_battle()
 	var m := Metrics.new(sim, terrain, ai)
 	var t0 := Time.get_ticks_msec()
 	var won := -1
@@ -128,6 +147,7 @@ func run_scenario(name: String, diff: String, seed_value: int) -> void:
 	for r in sim.regiments:
 		print("    T%d %-20s %2d/%2d %s" % [r.team, r.display_name, r.alive, r.initial_men, r.morale_name()])
 	m.report(won, wall)
+	_rows.append([name, diff, seed_value, ["draw", "player", "AI"][won + 1], sim.time, sim.men_alive(0, false), sim.men_alive(1, false)])
 	# --- checks ----------------------------------------------------------------------
 	check(sim.ended, "battle resolves within %.0f s sim (ended at %.0f s)" % [MAX_T, sim.time])
 	if name == "passive" or name == "scripted":
@@ -140,7 +160,7 @@ func run_scenario(name: String, diff: String, seed_value: int) -> void:
 	check(m.wet_soldier_samples == 0, "no AI soldier in deep water (%d samples)" % m.wet_soldier_samples)
 	if m.crossed > 0:
 		check(m.crossed_via_ford == m.crossed, "AI crosses only at the ford (%d/%d regiments)" % [m.crossed_via_ford, m.crossed])
-	if name == "passive":
+	if name == "passive" and map_key == "kurogawa":
 		check(m.crossed > 0, "AI uses the ford to reach the enemy (%d regiments crossed)" % m.crossed)
 	ai.queue_free()
 	if p0 is Node:
@@ -192,8 +212,9 @@ class Metrics:
 			for i in r.soldiers:
 				if sim.state[i] < BattleSim.DEAD and sim.state[i] != BattleSim.ROUT and terrain.is_water(sim.pos[i]):
 					wet_soldier_samples += 1
-			if r.mean_pos.distance_to(ai.ford) < 260.0:
-				_at_ford[r.id] = true
+			for fd in terrain.map.fords:
+				if r.mean_pos.distance_to((fd["a"] + fd["b"]) * 0.5) < 260.0:
+					_at_ford[r.id] = true
 			if not _done.has(r.id) and terrain.segment_blocked(r.mean_pos, home) and not r.is_routing():
 				_done[r.id] = true
 				crossed += 1
@@ -275,3 +296,38 @@ class Metrics:
 		print("  cavalry: %d charges, %d flank/rear, targets %s, disengages %d" % [st["cav_charges"], flank, tcount, st["cav_disengages"]])
 		print("  spears braced %d, wavering fallbacks %d, general commits %d" % [st["braces"], st["fallbacks"], st["general_commits"]])
 		print("  ford: %d regiments crossed, %d via ford, wet soldier samples %d" % [crossed, crossed_via_ford, wet_soldier_samples])
+
+
+## Deployment sanity: everyone inside the zone, missiles ahead of the line, cavalry outermost,
+## general behind.
+func _check_deploy(sim: BattleSim, ai: AIGeneral) -> void:
+	var zone: Rect2 = sim.deploy_zones[ai.team].grow(2.0)
+	var fwd := ai.line_fwd
+	var right := Vector2(-fwd.y, fwd.x)
+	var inside := true
+	var line_d := 0.0
+	var nl := 0
+	var miss_ahead := true
+	var cav_lat := 0.0
+	var line_lat := 0.0
+	var gen_behind := true
+	for r in sim.regiments_of(ai.team):
+		if not zone.has_point(r.centre):
+			inside = false
+		if r.type == UnitTypes.YARI or r.type == UnitTypes.SAMURAI:
+			line_d += (r.centre - ai.line_anchor).dot(fwd)
+			nl += 1
+			line_lat = maxf(line_lat, absf((r.centre - ai.line_anchor).dot(right)))
+	line_d /= maxf(1, nl)
+	for r in sim.regiments_of(ai.team):
+		var d := (r.centre - ai.line_anchor).dot(fwd)
+		if r.is_ranged() and d < line_d + 10.0:
+			miss_ahead = false
+		if r.type == UnitTypes.CAVALRY:
+			cav_lat = maxf(cav_lat, absf((r.centre - ai.line_anchor).dot(right)))
+		if r.type == UnitTypes.GENERAL and d > line_d - 60.0:
+			gen_behind = false
+	check(inside, "deployment: every AI regiment inside its zone")
+	check(miss_ahead, "deployment: missiles ahead of the line")
+	check(cav_lat > line_lat, "deployment: cavalry on the wings")
+	check(gen_behind, "deployment: general behind the line")

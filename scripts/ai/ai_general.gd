@@ -74,6 +74,10 @@ var _enemy_prev := {}              # enemy id -> [pos, time] (velocity estimate 
 var _enemy_vel := {}               # enemy id -> Vector2
 var _next_strategy := 0.0
 var _started := false
+var _deployed := false
+var _side_fords: Array = []         # secondary fords: {"a", "b", "guard": Regiment, "quiet": time}
+var _soften_men := Vector2.ZERO     # (our men, enemy men) when softening began
+var hint_posture := ""              # map's ai_hints["posture"] ("attack" / "defend")
 var _line_slots := {}              # id -> Vector2 slot centre on the line
 
 # --- metrics for QA / tests ----------------------------------------------------------
@@ -98,7 +102,13 @@ func think() -> void:
 
 
 func update() -> void:
-	if sim == null or sim.paused or sim.ended or sim.time < start_delay:
+	if sim == null:
+		return
+	if sim.deploying:
+		if not _deployed:
+			deploy()
+		return
+	if sim.paused or sim.ended or sim.time < start_delay:
 		return
 	if not _started:
 		_start()
@@ -125,6 +135,16 @@ func _start() -> void:
 		_next_think[r.id] = sim.time + think_interval * float(k) / n
 		r.morale = clampf(r.morale + _cfg("morale_bonus"), 0.0, 100.0)
 	_next_strategy = sim.time
+	_read_map()
+	_log("AIGeneral online: team %d, difficulty %s, ford %s, high ground %s, map posture %s" % [team, difficulty, ford, high_ground, hint_posture])
+
+
+var _map_read := false
+
+func _read_map() -> void:
+	if _map_read:
+		return
+	_map_read = true
 	var tm = sim.terrain
 	if tm != null and tm.map != null:
 		var m: MapDef = tm.map
@@ -137,7 +157,9 @@ func _start() -> void:
 			ford = hints["ford"]
 		if hints.has("high_ground"):
 			high_ground = hints["high_ground"]
-	_log("AIGeneral online: team %d, difficulty %s, ford %s, high ground %s" % [team, difficulty, ford, high_ground])
+		hint_posture = m.ai_posture_hint if m.ai_posture_hint != "" else hints.get("posture", "")
+		for k in range(1, m.fords.size()):
+			_side_fords.append({"a": m.fords[k]["a"], "b": m.fords[k]["b"], "guard": null, "quiet": 0.0})
 
 
 func _log(msg: String) -> void:
@@ -269,7 +291,15 @@ func _strategy() -> void:
 	var want: int
 	var why := ""
 	var was_all_out := all_out
-	all_out = en_frac < 0.35 or eff > 2.4
+	all_out = (en_frac < 0.35 and eff > 1.0) or eff > 2.4
+	# observed enemy drift toward us (px/s), weighted by men
+	var adv := 0.0
+	var adv_w := 0.0
+	for e in enemies:
+		adv += enemy_velocity(e).dot((my_com - e.mean_pos).normalized()) * e.alive
+		adv_w += e.alive
+	adv /= maxf(adv_w, 1.0)
+	var on_high := high_ground != Vector2.INF and line_anchor.distance_to(high_ground) < 450.0
 	if all_out:
 		want = Posture.ATTACK
 		why = "enemy broken (%.0f%% standing)" % (en_frac * 100.0) if en_frac < 0.35 else "overwhelming advantage"
@@ -281,6 +311,14 @@ func _strategy() -> void:
 		# the enemy is at the river: let him come through the ford in column instead of us
 		want = Posture.DEFEND
 		why = "holding the ford, enemy at the river"
+	elif posture == Posture.DEFEND and adv > 12.0 and eff < 1.6 and gap < 1400.0:
+		# he is coming to us: receive him on our formed line rather than meet him halfway
+		want = Posture.DEFEND
+		why = "enemy advancing into our line"
+	elif hint_posture == "defend" and high_ground != Vector2.INF and eff < 1.5 \
+			and not (posture == Posture.ATTACK and phase != "approach"):
+		want = Posture.DEFEND
+		why = "holding the high ground"
 	elif ranged_ratio > 1.4 and eff < 1.6 and not (posture == Posture.ATTACK and phase != "approach"):
 		want = Posture.SKIRMISH
 		why = "missile advantage"
@@ -288,7 +326,8 @@ func _strategy() -> void:
 		want = Posture.ATTACK
 		why = "stronger or even"
 	# patience: an enemy that will not come is attacked (passive players lose)
-	if want != Posture.ATTACK and posture != Posture.ATTACK and sim.time - posture_since > _cfg("patience") \
+	var patience := _cfg("patience") * (2.5 if on_high else 1.0)
+	if want != Posture.ATTACK and posture != Posture.ATTACK and sim.time - posture_since > patience \
 			and gap > 700.0 and eff > 0.55 and not _impatient:
 		_impatient = true
 		_log("enemy is passive for %.0f s: abandoning %s" % [sim.time - posture_since, POSTURE_NAMES[posture]])
@@ -321,6 +360,7 @@ func _strategy() -> void:
 		_log("battle lost (strength %.2f): the general withdraws" % strength_ratio)
 
 	_update_phase(mine, gap)
+	_update_guards(mine, enemies)
 	_plan_line(mine, enemies)
 
 
@@ -360,9 +400,27 @@ func _update_phase(mine: Array[Regiment], gap: float) -> void:
 					_set_phase("assault", "no missile edge to soften with")
 				else:
 					_set_phase("soften", "line formed at bow range")
+					_soften_men = Vector2(sim.men_alive(team, false), sim.men_alive(1 - team, false))
 		"soften":
-			if sim.time - phase_since > soften_t or my_missiles < 20 or gap < 330.0:
-				_set_phase("assault", "softened for %.0f s" % (sim.time - phase_since))
+			# keep shooting while the exchange is one-sided (a passive enemy bleeds for free);
+			# go in once we are clearly stronger, the arrows stop paying, or he comes at us
+			var t := sim.time - phase_since
+			var our_loss := _soften_men.x - sim.men_alive(team, false)
+			var their_loss := _soften_men.y - sim.men_alive(1 - team, false)
+			var paying := their_loss > our_loss * 1.2 + 3.0
+			var why := ""
+			if gap < 330.0:
+				why = "enemy closed in"
+			elif my_missiles < 20:
+				why = "missiles spent"
+			elif strength_ratio > 1.35 and t > 10.0:
+				why = "softened to strength %.2f" % strength_ratio
+			elif t > soften_t and not paying:
+				why = "arrows no longer paying (%d vs %d lost)" % [their_loss, our_loss]
+			elif t > soften_t * 5.0:
+				why = "softened long enough"
+			if why != "":
+				_set_phase("assault", "%s after %.0f s" % [why, t])
 
 
 # =====================================================================================
@@ -382,7 +440,13 @@ func _plan_line(mine: Array[Regiment], enemies: Array[Regiment]) -> void:
 	var line: Array[Regiment] = []
 	var missiles: Array[Regiment] = []
 	var cav: Array[Regiment] = []
+	var guards := {}
+	for f in _side_fords:
+		if f["guard"] != null:
+			guards[(f["guard"] as Regiment).id] = f
 	for r in mine:
+		if guards.has(r.id):
+			continue
 		match r.type:
 			UnitTypes.YARI, UnitTypes.SAMURAI: line.append(r)
 			UnitTypes.YUMI, UnitTypes.TEPPO: missiles.append(r)
@@ -471,6 +535,12 @@ func _plan_line(mine: Array[Regiment], enemies: Array[Regiment]) -> void:
 		var p := anchor + right * side * (half + 120.0 + float(k / 2) * 120.0) - fwd * 40.0
 		_line_slots[r.id] = {"pos": _dry(p, -fwd), "fwd": fwd, "role": "cav"}
 
+	for gid in guards:
+		var f: Dictionary = guards[gid]
+		var near: Vector2 = f["a"] if my_com.distance_to(f["a"]) < my_com.distance_to(f["b"]) else f["b"]
+		var far: Vector2 = f["b"] if near == f["a"] else f["a"]
+		var out := (near - far).normalized()
+		_line_slots[gid] = {"pos": _dry(near + out * 170.0, out), "fwd": -out, "role": "guard", "ford": (near + far) * 0.5}
 	var g := sim.general_of(team)
 	if g != null:
 		_line_slots[g.id] = {"pos": _dry(anchor - fwd * (line_depth * 0.5 + 230.0), -fwd), "fwd": fwd, "role": "general"}
@@ -513,6 +583,7 @@ func _think_regiment(r: Regiment) -> void:
 		"line": _micro_line(r, slot)
 		"missile": _micro_missile(r, slot)
 		"cav": _micro_cav(r, slot)
+		"guard": _micro_guard(r, slot)
 
 
 func _micro_line(r: Regiment, slot: Dictionary) -> void:
@@ -531,7 +602,7 @@ func _micro_line(r: Regiment, slot: Dictionary) -> void:
 			return
 	var engage := _cfg("engage") * (1.8 if all_out else 1.0)
 	if posture == Posture.ATTACK and phase == "assault":
-		engage = maxf(engage, 520.0)
+		engage = 900.0   # the whole line goes in together (walk, then charge the last stretch)
 	elif posture == Posture.ATTACK:
 		engage = 140.0
 	if posture != Posture.ATTACK:
@@ -865,3 +936,137 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	if font != null:
 		draw_string(font, line_anchor + Vector2(14, -14), "%s%s  str %.2f" % [POSTURE_NAMES[posture], " ALL-OUT" if all_out else "", strength_ratio], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 0.2, 0.2))
+
+
+# =====================================================================================
+#  Deployment (sim.deploying): a proper battle line inside our zone
+# =====================================================================================
+
+## Places every regiment with sim.deploy_place: spears in the centre with samurai on either
+## side, missiles screening in front, cavalry on the wings, the general behind. The line
+## stands on the map's high ground when it lies inside the zone, else in the zone's forward part.
+func deploy() -> void:
+	_deployed = true
+	_read_map()
+	if team >= sim.deploy_zones.size():
+		return
+	var zone: Rect2 = sim.deploy_zones[team]
+	var mine := sim.regiments_of(team)
+	var en := sim.enemies_of(team)
+	var zc := zone.get_center()
+	var ecom := _com(en) if not en.is_empty() else zc - sim.home_dir(team)
+	var fwd := (ecom - zc).normalized()
+	if absf(fwd.x) > 0.6:   # face squarely across the field toward the enemy side
+		fwd = Vector2(signf(fwd.x), 0.0)
+	var right := Vector2(-fwd.y, fwd.x)
+	var depth_extent := absf(zone.size.dot(fwd))
+	var c := zc + fwd * depth_extent * 0.18
+	if high_ground != Vector2.INF and zone.grow(-120.0).has_point(high_ground):
+		c = high_ground + fwd * 60.0
+	var yari: Array[Regiment] = []
+	var sam: Array[Regiment] = []
+	var missiles: Array[Regiment] = []
+	var cav: Array[Regiment] = []
+	var gen: Regiment = null
+	for r in mine:
+		match r.type:
+			UnitTypes.YARI: yari.append(r)
+			UnitTypes.SAMURAI: sam.append(r)
+			UnitTypes.YUMI, UnitTypes.TEPPO: missiles.append(r)
+			UnitTypes.CAVALRY: cav.append(r)
+			UnitTypes.GENERAL: gen = r
+	# line order: samurai on the outsides, spears in the centre
+	var line: Array[Regiment] = []
+	for k in sam.size():
+		if k % 2 == 0:
+			line.push_front(sam[k])
+		else:
+			line.push_back(sam[k])
+	var mid := (sam.size() + 1) / 2
+	for k in yari.size():
+		line.insert(mid + k, yari[k])
+	var total := 0.0
+	var line_depth := 0.0
+	for r in line:
+		total += _line_width(r) + 34.0
+		line_depth = maxf(line_depth, r.depth())
+	var x := -total * 0.5
+	for r in line:
+		var w := _line_width(r) + 34.0
+		sim.deploy_place(r, c + right * (x + w * 0.5), fwd, r.files)
+		x += w
+	var half := maxf(total * 0.5, 150.0)
+	# missiles: teppo in the centre, archers either side, ahead of the line
+	missiles.sort_custom(func(a, b): return a.type == UnitTypes.TEPPO and b.type != UnitTypes.TEPPO)
+	var order: Array[Regiment] = []
+	for k in missiles.size():
+		if k % 2 == 0:
+			order.push_back(missiles[k])
+		else:
+			order.push_front(missiles[k])
+	for k in order.size():
+		var r := order[k]
+		var lat := ((float(k) + 0.5) / order.size() * 2.0 - 1.0) * half * 0.75
+		var ahead := line_depth * 0.5 + r.depth() * 0.5 + 60.0
+		sim.deploy_place(r, c + right * lat + fwd * ahead, fwd, r.files)
+	for k in cav.size():
+		var side := -1.0 if k % 2 == 0 else 1.0
+		sim.deploy_place(cav[k], c + right * side * (half + 120.0 + float(k / 2) * 120.0) - fwd * 40.0, fwd, cav[k].files)
+	if gen != null:
+		sim.deploy_place(gen, c - fwd * (line_depth * 0.5 + 200.0), fwd, gen.files)
+	line_anchor = c
+	line_fwd = fwd
+	_log("deployed team %d: line of %d at %s facing %s (%d missiles ahead, %d cavalry on the wings)" % [
+		team, line.size(), c.round(), fwd, order.size(), cav.size()])
+
+
+# =====================================================================================
+#  Secondary (hidden) fords: post a guard when the enemy comes near one
+# =====================================================================================
+
+func _update_guards(mine: Array[Regiment], enemies: Array[Regiment]) -> void:
+	for f in _side_fords:
+		var c: Vector2 = (f["a"] + f["b"]) * 0.5
+		var threat := false
+		for e in enemies:
+			if e.mean_pos.distance_to(c) < 750.0:
+				threat = true
+				break
+		var gr: Regiment = f["guard"]
+		if gr != null and (gr.is_broken() or gr.withdrawn):
+			f["guard"] = null
+			gr = null
+		if threat:
+			f["quiet"] = sim.time
+			if gr == null:
+				var best: Regiment = null
+				var best_d := INF
+				for r in mine:
+					if r.is_engaged() or not (r.type == UnitTypes.YARI or r.type == UnitTypes.CAVALRY):
+						continue
+					var d := r.mean_pos.distance_to(c) * (1.0 if r.type == UnitTypes.YARI else 1.4)
+					if d < best_d:
+						best_d = d
+						best = r
+				if best != null:
+					f["guard"] = best
+					_cav.erase(best.id)
+					_log("enemy near the hidden ford at %s: %s sent to guard it" % [c.round(), best.display_name])
+		elif gr != null and sim.time - float(f["quiet"]) > 25.0:
+			f["guard"] = null
+			_log("hidden ford quiet: %s rejoins the army" % gr.display_name)
+
+
+func _micro_guard(r: Regiment, slot: Dictionary) -> void:
+	if r.is_engaged():
+		return
+	var post: Vector2 = slot["pos"]
+	for e in sim.enemies_of(team):
+		if e.is_broken() or e.withdrawn:
+			continue
+		if e.mean_pos.distance_to(post) < 320.0 and not _blocked(post, e.mean_pos):
+			if r.target() != e:
+				r.order_attack(e, false)
+				_dest.erase(r.id)
+			return
+	_move_to(r, post, slot["fwd"], true, Color(0.7, 0.3, 1))
