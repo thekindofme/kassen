@@ -14,7 +14,7 @@ Downloaded from the Google Fonts repository (`github.com/google/fonts`, `ofl/` t
 
 `ShipporiMinchoB1-*.ttf` and `YujiBoku-Regular.ttf` are **subsets** of the original fonts made with
 fontTools (`pyftsubset`) to keep the build small: Basic Latin, Latin-1, general punctuation, CJK
-punctuation and the ~150 kanji used by the game UI. The family names are unchanged as permitted for
+punctuation, hiragana, katakana and the ~200 kanji used by the game UI. The family names are unchanged as permitted for
 subsetting by the OFL FAQ (no Reserved Font Names are declared by these projects). To add more kanji,
 re-run the subset from the original fonts with the extra characters in `--text=`.
 

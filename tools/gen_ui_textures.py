@@ -72,8 +72,8 @@ def lacquer_frame(name, size=96, bright=1.0, fill_dark=1.0, glow=0.0):
     im.save(os.path.join(UI, name))
 
 
-def washi_panel(name, W=128, H=128):
-    base = crop(os.path.join(UI, "washi.png"), 200, 200, W, H)
+def washi_panel(name, W=512, H=512):
+    base = crop(os.path.join(UI, "washi.png"), 100, 100, W, H)
     arr = np.asarray(base).astype(np.float32)
     # deckled (torn) alpha edge
     a = np.ones((H, W), np.float32)

@@ -93,6 +93,7 @@ content_margin_left = 14.0
 content_margin_top = 10.0
 content_margin_right = 14.0
 content_margin_bottom = 10.0
+modulate_color = Color(0.96, 0.92, 0.86, 1)
 
 [sub_resource type="StyleBoxEmpty" id="sb_empty"]
 
