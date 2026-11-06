@@ -26,6 +26,7 @@ uniform float mist_max = 0.62;
 
 uniform float exposure = 1.0;
 uniform float contrast = 1.12;
+uniform float midtone_gamma = 0.88;   // <1 lifts the midtones
 uniform float saturation = 1.0;
 uniform float ground_desat = 0.16;
 uniform float red_boost = 0.3;
@@ -88,6 +89,7 @@ void fragment() {
 	c = l + chroma;
 	c *= mix(shadow_tint, highlight_tint, smoothstep(0.08, 0.8, l));
 	c = clamp(c, 0.0, 1.0);
+	c = pow(c, vec3(midtone_gamma));
 	c = mix(c, c * c * (3.0 - 2.0 * c), clamp(contrast - 1.0, -1.0, 1.0));
 
 	// vignette (aspect-correct)

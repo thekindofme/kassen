@@ -11,7 +11,7 @@ extends Node2D
 @export var post_enabled := true
 @export var wind := Vector2(18.0, -4.0)
 @export_group("Cloud shadows")
-@export_range(0.0, 0.6) var cloud_strength := 0.15
+@export_range(0.0, 0.6) var cloud_strength := 0.11
 @export_range(0.0, 1.0) var cloud_coverage := 0.52
 @export var cloud_softness := 0.16
 @export var cloud_scale := 0.00032
@@ -22,17 +22,18 @@ extends Node2D
 @export var mist_clear_time := 300.0                  ## sim seconds for the mist to thin out
 @export var mist_color := Color(0.84, 0.87, 0.86)
 @export_group("Grade")
-@export var exposure := 1.06
-@export var contrast := 1.12
+@export var exposure := 1.1
+@export var contrast := 1.06
+@export var midtone_gamma := 0.88     ## <1 lifts midtones
 @export var saturation := 1.0
 @export_range(0.0, 1.0) var ground_desat := 0.16
-@export_range(0.0, 1.0) var red_boost := 0.3
+@export_range(0.0, 1.0) var red_boost := 0.35
 @export var shadow_tint := Color(0.94, 0.96, 1.04)
 @export var highlight_tint := Color(1.04, 1.01, 0.95)
 @export_group("Lens")
 @export var bloom_threshold := 0.72
 @export var bloom_strength := 0.3
-@export_range(0.0, 1.0) var vignette := 0.26
+@export_range(0.0, 1.0) var vignette := 0.16
 @export_range(0.0, 0.2) var grain := 0.022
 
 var sim: BattleSim
@@ -86,14 +87,14 @@ func setup(p_sim: BattleSim, p_terrain: Terrain, args: Dictionary = {}) -> void:
 func apply_time_of_day(tod: String) -> void:
 	match tod:
 		"dawn":
-			exposure = 0.97
+			exposure = 1.04
 			shadow_tint = Color(0.9, 0.94, 1.08)
 			highlight_tint = Color(1.07, 1.0, 0.92)
 			mist_color = Color(0.86, 0.87, 0.9)
 			cloud_tint = Color(0.8, 0.86, 1.02)
 			saturation = 0.94
 		"dusk":
-			exposure = 0.92
+			exposure = 0.98
 			shadow_tint = Color(0.9, 0.9, 1.06)
 			highlight_tint = Color(1.12, 0.98, 0.84)
 			mist_color = Color(0.8, 0.76, 0.74)
@@ -142,6 +143,7 @@ func _process(_delta: float) -> void:
 	mat.set_shader_parameter("mist_color", mist_color)
 	mat.set_shader_parameter("exposure", exposure)
 	mat.set_shader_parameter("contrast", contrast)
+	mat.set_shader_parameter("midtone_gamma", midtone_gamma)
 	mat.set_shader_parameter("saturation", saturation)
 	mat.set_shader_parameter("ground_desat", ground_desat)
 	mat.set_shader_parameter("red_boost", red_boost)

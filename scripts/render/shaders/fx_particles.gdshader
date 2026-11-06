@@ -50,14 +50,16 @@ void vertex() {
 	if (alive) {
 		float fin = 1.0 - smoothstep(life * 0.35, life, age);
 		if (kind == 0) { // matchlock smoke: muzzle blast, billow, hand over to wind, rise
-			float g = 1.0 + 2.6 * (1.0 - exp(-age / 2.4));
-			off = drift(v0, wind, 1.7, age) + vec2(0.0, -16.0 * (1.0 - exp(-age * 0.45)));
-			off += vec2(sin(age * 0.6 + seed * 21.0), cos(age * 0.45 + seed * 13.0)) * 4.0 * sqrt(age);
+			float g = 1.0 + 2.2 * (1.0 - exp(-age / 2.0));
+			// per-puff wind speed varies with seed, so the bank slowly shears downwind;
+			// top-down view: only a few px of "rise", the rest is expansion and fade
+			off = drift(v0, wind * (0.55 + 0.9 * seed), 1.7, age) + vec2(0.0, -5.0 * (1.0 - exp(-age * 0.45)));
+			off += vec2(sin(age * 0.6 + seed * 21.0), cos(age * 0.45 + seed * 13.0)) * 3.0 * sqrt(age);
 			dim = vec2(size * 1.3, size) * g;
 			ang += age * (seed - 0.5) * 0.18;
 			float hot = 1.0 - smoothstep(0.0, 0.22, age);
 			col = mix(smoke_color * (0.86 + 0.2 * seed), vec3(1.0, 0.78, 0.5), hot * 0.7);
-			a = smoke_alpha * smoothstep(0.0, 0.1, age) * fin * clamp(1.5 / sqrt(g), 0.0, 1.0);
+			a = smoke_alpha * smoothstep(0.0, 0.15, age) * fin * clamp(1.3 / sqrt(g), 0.0, 1.0) * (0.6 + 0.4 * fract(seed * 7.13));
 		} else if (kind == 1 || kind == 4) { // dust (1) / impact puff (4)
 			float tau = kind == 1 ? 0.9 : 0.3;
 			float gr = kind == 1 ? 1.9 : 1.3;

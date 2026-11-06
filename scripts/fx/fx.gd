@@ -27,10 +27,10 @@ const K_RING := 8
 @export var fx_enabled := true
 @export var wind := Vector2(18.0, -4.0)
 @export_group("Matchlock")
-@export var smoke_puffs_per_shot := 6
+@export var smoke_puffs_per_shot := 10
 @export var smoke_life := Vector2(6.0, 10.0)
-@export var smoke_size := 22.0
-@export var smoke_alpha := 0.42
+@export var smoke_size := 27.0
+@export var smoke_alpha := 0.5
 @export var muzzle_height := 24.0
 @export_group("Dust and water")
 @export var dust_alpha := 0.4
@@ -39,8 +39,8 @@ const K_RING := 8
 @export_group("Melee and blood")
 @export var blood_amount := 1.0
 @export var spark_chance := 0.35
-@export var mud_rate := 1.0
-@export var mud_opacity := 0.11
+@export var mud_rate := 1.4
+@export var mud_opacity := 0.16
 @export_group("Decals")
 @export var blood_decal_cap := 4096
 @export var mud_decal_cap := 6144
@@ -72,6 +72,7 @@ var _ms_peak := 0.0
 
 var _last_tick := -1
 var _last_shot_t := -1.0
+var _last_shot_log := -10.0
 var _pflash := PackedFloat32Array()
 var _trauma := 0.0
 var _shake_t := 0.0
@@ -210,6 +211,9 @@ func _poll_shots() -> void:
 		if st <= _last_shot_t:
 			continue
 		newest = maxf(newest, st)
+		if stats and st > _last_shot_log + 2.0:
+			_last_shot_log = st
+			print("[fx] volley t=%.1f at %s" % [st, s[0]])
 		var origin: Vector2 = s[0]
 		var end: Vector2 = s[1]
 		var dir := (end - origin).normalized()
@@ -222,16 +226,17 @@ func _gun_shot(muzzle: Vector2, dir: Vector2, t: float) -> void:
 	if near:
 		glow.particle(muzzle, K_FLASH, FxTextures.L_FLASH + rng.randi() % 2, rng.randf(), 0.075, dir, t, rng.randf_range(15.0, 21.0))
 		glow.particle(muzzle + dir * 6.0, K_GLOW, FxTextures.L_DOT, rng.randf(), 0.14, Vector2.ZERO, t, 46.0)
-	# a dense billow at the muzzle, then a cone of slower puffs that settle into a smoke bank
+	# a low, wide bank: puffs spread along the firing line's frontage (perpendicular to the shot)
+	# and are pushed only 20-60 px forward; drag k=1.7 in the shader, so travel ~= speed / 1.7
 	var perp := Vector2(-dir.y, dir.x)
 	for k in smoke_puffs_per_shot:
 		var f := float(k) / maxf(1.0, float(smoke_puffs_per_shot - 1))
-		var speed := lerpf(260.0, 50.0, f) * rng.randf_range(0.7, 1.2)
-		var v := dir * speed + perp * rng.randf_range(-35.0, 35.0) + Vector2(0, rng.randf_range(-10.0, 4.0))
+		var speed := lerpf(100.0, 34.0, f) * rng.randf_range(0.8, 1.15)
+		var v := dir * speed + perp * rng.randf_range(-30.0, 30.0)
 		var life := rng.randf_range(smoke_life.x, smoke_life.y)
-		var size := smoke_size * rng.randf_range(0.6, 1.1) * lerpf(0.75, 1.15, f)
-		air.particle(muzzle + perp * rng.randf_range(-3.0, 3.0), K_SMOKE, FxTextures.L_SMOKE + rng.randi() % 4,
-			rng.randf(), life, v, t + k * 0.015, size)
+		var size := smoke_size * rng.randf_range(0.7, 1.15) * lerpf(0.8, 1.2, f)
+		air.particle(muzzle + perp * rng.randf_range(-14.0, 14.0) + Vector2(0, muzzle_height * 0.6), K_SMOKE,
+			FxTextures.L_SMOKE + rng.randi() % 4, rng.randf(), life, v, t + k * 0.015, size)
 
 
 # =====================================================================================
@@ -273,7 +278,7 @@ func _scan_tick() -> void:
 				if tg >= 0 and view.has_point(p):
 					_sparks((p + spos[tg]) * 0.5 + Vector2(0, -20.0), t, 4 + rng.randi() % 4)
 			if rng.randf() < mud_p:
-				_mud(p + Vector2(rng.randf_range(-8, 8), rng.randf_range(-4, 6)), rng.randf_range(26.0, 46.0), mud_opacity)
+				_mud(p + Vector2(rng.randf_range(-8, 8), rng.randf_range(-4, 6)), rng.randf_range(32.0, 56.0), mud_opacity)
 		var v := vel[i]
 		var spd2 := v.length_squared()
 		if spd2 < 225.0:
@@ -392,7 +397,7 @@ func _on_died(i: int) -> void:
 		return
 	var p := sim.pos[i]
 	var mounted := sim.T_MOUNT[sim.utype[i]] == 1
-	var s := rng.randf_range(15.0, 22.0) * (1.5 if mounted else 1.0)
+	var s := rng.randf_range(19.0, 27.0) * (1.5 if mounted else 1.0)
 	_blood_decal(p + Vector2(rng.randf_range(-9, 9), rng.randf_range(-3, 6)), s)
 	if rng.randf() < 0.45:
 		_blood_decal(p + Vector2(rng.randf_range(-10, 10), rng.randf_range(-5, 6)), s * 0.55)

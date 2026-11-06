@@ -353,15 +353,8 @@ class _FxLayer extends Node2D:
 			var from: Vector2 = s[0]
 			if not view.has_point(from):
 				continue
-			if age < 0.08:
-				draw_circle(from, 6.0 - age * 40.0, Color(1.0, 0.85, 0.45, 0.9))
+			if age < 0.08:   # muzzle flash + smoke are drawn by BattleFX (scripts/fx); tracer only here
 				draw_line(from, s[1], Color(1.0, 0.95, 0.75, 0.35 * (1.0 - age / 0.08)), 1.0)
-			if age < 2.0:
-				var t := age / 2.0
-				var drift := Vector2(10.0, -6.0) * age
-				var rad := 4.0 + age * 9.0
-				draw_circle(from + drift + Vector2(4, -10), rad, Color(0.85, 0.84, 0.8, 0.42 * (1.0 - t)))
-				draw_circle(from + drift * 1.4 + Vector2(10, -14), rad * 0.7, Color(0.9, 0.9, 0.86, 0.3 * (1.0 - t)))
 
 
 # =====================================================================================
