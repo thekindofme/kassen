@@ -76,6 +76,7 @@ var _next_strategy := 0.0
 var _started := false
 var _deployed := false
 var _side_fords: Array = []         # secondary fords: {"a", "b", "guard": Regiment, "quiet": time}
+var _flank_logged := false
 var _soften_men := Vector2.ZERO     # (our men, enemy men) when softening began
 var hint_posture := ""              # map's ai_hints["posture"] ("attack" / "defend")
 var _line_slots := {}              # id -> Vector2 slot centre on the line
@@ -291,7 +292,7 @@ func _strategy() -> void:
 	var want: int
 	var why := ""
 	var was_all_out := all_out
-	all_out = (en_frac < 0.35 and eff > 1.0) or eff > 2.4
+	all_out = (en_frac < 0.35 and eff > 1.0) or strength_ratio > 2.4
 	# observed enemy drift toward us (px/s), weighted by men
 	var adv := 0.0
 	var adv_w := 0.0
@@ -327,6 +328,8 @@ func _strategy() -> void:
 		why = "stronger or even"
 	# patience: an enemy that will not come is attacked (passive players lose)
 	var patience := _cfg("patience") * (2.5 if on_high else 1.0)
+	if enemy_holds_crossing():
+		patience *= 3.0   # don't feed the army into a defended ford; wait for him to come
 	if want != Posture.ATTACK and posture != Posture.ATTACK and sim.time - posture_since > patience \
 			and gap > 700.0 and eff > 0.55 and not _impatient:
 		_impatient = true
@@ -390,7 +393,7 @@ func _update_phase(mine: Array[Regiment], gap: float) -> void:
 	if all_out:
 		_set_phase("assault", "all-out")
 		return
-	var soften_t := 30.0 / _cfg("aggression")
+	var soften_t := 30.0   # aggression changes posture choices, not how well we prepare an assault
 	match phase:
 		"approach":
 			if gap < 330.0:
@@ -426,6 +429,36 @@ func _update_phase(mine: Array[Regiment], gap: float) -> void:
 # =====================================================================================
 #  Layer 2: group tactics (battle line, screens, wings, general)
 # =====================================================================================
+
+## Which ford to attack across: the main ford unless the enemy army sits on its far bank and a
+## secondary (hidden) ford is clear, in which case the army swings round through that one.
+## Returns [near end, far end, is_secondary].
+func _crossing_choice() -> Array:
+	var nf := _near_far_ford()
+	var best: Array = [nf[0], nf[1], false]
+	if enemy_com.distance_to(nf[1]) > 650.0:
+		return best
+	var best_cost := my_com.distance_to(nf[0]) + 2000.0   # a defended ford costs dearly
+	for f in _side_fords:
+		var a: Vector2 = f["a"]
+		var b: Vector2 = f["b"]
+		var near := a if my_com.distance_to(a) < my_com.distance_to(b) else b
+		var far := b if near == a else a
+		if enemy_com.distance_to(far) < 800.0:
+			continue
+		var cost := my_com.distance_to(near) + far.distance_to(enemy_com) * 0.5
+		if cost < best_cost:
+			best_cost = cost
+			best = [near, far, true]
+	return best
+
+
+func enemy_holds_crossing() -> bool:
+	## The enemy army sits on the far bank of every ford (crossing would be into his line).
+	if not crossing:
+		return false
+	return not bool(_crossing_choice()[2]) and enemy_com.distance_to(_near_far_ford()[1]) < 650.0
+
 
 func _near_far_ford() -> Array:
 	## [near-side ford end, far-side ford end] relative to our army.
@@ -463,7 +496,11 @@ func _plan_line(mine: Array[Regiment], enemies: Array[Regiment]) -> void:
 		Posture.ATTACK:
 			if crossing and _river_between(cur_line, enemy_com):
 				# bridgehead: cross at the ford and form up on the far bank
-				var far: Vector2 = nf[1]
+				var cc := _crossing_choice()
+				var far: Vector2 = cc[1]
+				if cc[2] and not _flank_logged:
+					_flank_logged = true
+					_log("enemy holds the main ford: swinging round through the hidden ford at %s" % far.round())
 				fwd = (enemy_com - far).normalized()
 				anchor = far + fwd * 320.0
 			else:

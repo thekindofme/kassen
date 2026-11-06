@@ -13,6 +13,7 @@ var _passes := 0
 var _ran := false
 var _cur := ""
 var map_key := "kurogawa"
+var p0_diff := ""                  # aivai: difficulty of the team-0 AI ("" = same as the AI under test)
 var _rows: Array = []
 
 
@@ -28,6 +29,7 @@ func _process(_d: float) -> bool:
 	var diff: String = args.get("diff", "normal")
 	var list: Array = ["passive", "scripted", "ford", "aivai"] if which == "all" else Array(which.split(","))
 	map_key = args.get("map", "kurogawa")
+	p0_diff = args.get("p0diff", "")
 	var seeds: Array = Array(String(args.get("seeds", args.get("seed", "1574"))).split(","))
 	var diffs: Array = Array(diff.split(","))
 	for d in diffs:
@@ -109,7 +111,7 @@ func run_scenario(name: String, diff: String, seed_value: int) -> void:
 			p0.sim = sim
 		"aivai":
 			var a0 := AIGeneral.new()
-			a0.sim = sim; a0.team = 0; a0.auto = false; a0.difficulty = diff; a0.start_delay = 1.0
+			a0.sim = sim; a0.team = 0; a0.auto = false; a0.difficulty = p0_diff if p0_diff != "" else diff; a0.start_delay = 1.0
 			a0.verbose = true
 			root.add_child(a0)
 			p0 = a0
@@ -215,7 +217,7 @@ class Metrics:
 			for fd in terrain.map.fords:
 				if r.mean_pos.distance_to((fd["a"] + fd["b"]) * 0.5) < 260.0:
 					_at_ford[r.id] = true
-			if not _done.has(r.id) and terrain.segment_blocked(r.mean_pos, home) and not r.is_routing():
+			if not _done.has(r.id) and _across(r.mean_pos) and not r.is_routing():
 				_done[r.id] = true
 				crossed += 1
 				if _at_ford.has(r.id):
@@ -257,6 +259,14 @@ class Metrics:
 			var g := (b.mean_pos - a.mean_pos).dot(right) - (a.width() + b.width()) * 0.5
 			gap_sum += g
 			gap_n += 1
+
+	## On the far (west) bank: no straight dry path to any of several home-side points (a
+	## regiment standing on the home bank's edge can still see one of them).
+	func _across(p: Vector2) -> bool:
+		for q in [home, Vector2(4600, 400), Vector2(4600, 2800), Vector2(3600, 1600), Vector2(3400, 900), Vector2(3400, 2400)]:
+			if not terrain.segment_blocked(p, q):
+				return false
+		return true
 
 	func mean_depth_dev() -> float:
 		return depth_dev_sum / maxf(1.0, line_samples)
