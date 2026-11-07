@@ -125,6 +125,8 @@ func _run() -> void:
 			await _scenario_smoke_input()
 		"tenmoku":
 			await _scenario_tenmoku()
+		"showcase":
+			await _scenario_showcase()
 		_:
 			check(false, "unknown scenario '%s'" % scenario)
 	finish()
@@ -1154,3 +1156,99 @@ func _scenario_tenmoku() -> void:
 		await _doctrine_tick()
 		await spectate()
 	await _end_of_battle(t_begin)
+
+
+
+# =====================================================================================
+#  Scenario: showcase (AI vs AI, "director" camera, HUD hidden). Not input-driven: the
+#  director moves the camera directly for smooth dollies. ~90 s of video.
+# =====================================================================================
+
+var _events: Array = []   # [priority, world pos, kind, sim time]
+
+func _scenario_showcase() -> void:
+	if not check(await wait_until(func(): return sim() != null, 900), "battle scene loaded"):
+		return
+	var s := sim()
+	_cursor.visible = false
+	var hud := get_tree().current_scene.get_node_or_null("Hud")
+	if hud != null:
+		hud.visible = false
+	var dbg := get_tree().current_scene.get_node_or_null("DebugHud")
+	if dbg != null:
+		dbg.visible = false
+	# a second AIGeneral commands the Hino
+	var ai0 := AIGeneral.new()
+	ai0.sim = s
+	ai0.team = 0
+	ai0.verbose = false
+	get_tree().current_scene.add_child(ai0)
+	s.volley.connect(func(p, kind): _events.append([2.0 if kind == "gun" else 1.0, p, kind, s.time]))
+	s.charge_impact.connect(func(p, st): if st > 2.0: _events.append([3.0 + st * 0.05, p, "charge", s.time]))
+	s.regiment_routed.connect(func(r): _events.append([1.5, r.mean_pos, "rout", s.time]))
+	s.melee_contact.connect(func(p): _events.append([2.5, p, "contact", s.time]))
+	var c := cam() as BattleCamera
+	c.edge_pan = false
+	var mid := Vector2.ZERO
+	for r in s.regiments:
+		mid += r.mean_pos
+	mid /= s.regiments.size()
+	# shot 1: deployment overview, slow push-in
+	await _dolly(mid + Vector2(-500, 0), 0.5, mid + Vector2(-250, 0), 0.62, 150)
+	s.begin_battle()
+	s.time_scale = 2.0
+	# shot 2: follow the first advance at the lines
+	var own_mid := Vector2.ZERO
+	for r in own():
+		own_mid += r.mean_pos
+	own_mid /= own().size()
+	await _dolly(own_mid, 0.9, own_mid + Vector2(250, 0), 1.4, 150)
+	var shots := 0
+	var shot_end := 0
+	var cur_target := c.position
+	var cur_zoom := 1.4
+	while not s.ended and shots < 40:
+		var best: Array = []
+		for e in _events:
+			if s.time - float(e[3]) < 5.0 and (best.is_empty() or e[0] > best[0]):
+				best = e
+		_events = _events.filter(func(e): return s.time - float(e[3]) < 5.0)
+		var tgt: Vector2 = best[1] if not best.is_empty() else hotspot()
+		var z := 1.5
+		if not best.is_empty():
+			match best[2]:
+				"charge": z = 2.1
+				"contact": z = 1.8
+				"gun": z = 1.9
+				"rout": z = 1.5
+				_: z = 1.6
+		s.time_scale = 1.0 if (not best.is_empty() and best[2] in ["charge", "contact", "gun"]) else 2.2
+		await _dolly(cur_target, cur_zoom, tgt, z, 45)
+		cur_target = tgt
+		cur_zoom = z
+		# hold and drift gently with the action
+		for k in 75:
+			var drift := cur_target.lerp(hotspot(), 0.004 * k)
+			c.focus_on(drift, cur_zoom)
+			await get_tree().process_frame
+			if s.ended:
+				break
+		shots += 1
+		_events.clear()
+	check(s.ended, "battle reached a result (winner %d)" % s.winner)
+	s.time_scale = 1.0
+	if hud != null:
+		hud.visible = true
+	await _dolly(c.position, c.zoom.x, hotspot(), 1.1, 60)
+	check(await wait_until(func(): return _result_visible(), 300), "victory banner / results shown")
+	await frames(150)
+
+
+## Smooth camera move (ease in/out) from a/za to b/zb over n frames.
+func _dolly(a: Vector2, za: float, b: Vector2, zb: float, n: int) -> void:
+	var c := cam() as BattleCamera
+	for k in range(1, n + 1):
+		var t := float(k) / n
+		t = t * t * (3.0 - 2.0 * t)
+		c.focus_on(a.lerp(b, t), lerpf(za, zb, t))
+		await get_tree().process_frame
