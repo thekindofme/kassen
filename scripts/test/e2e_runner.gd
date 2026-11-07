@@ -26,6 +26,7 @@ var _ripples: Array = []                    # [pos, age, color]
 var _cursor: Node2D
 var _frames := 0
 var _scene_name := ""
+var _assault := false   # doctrine treats every enemy as a target (attacking a defended position)
 var _ford := Vector2(2665, 1645)
 
 ## Enemy regiments that have crossed to our (west) bank: fighting in the ford funnel is suicide.
@@ -122,6 +123,8 @@ func _run() -> void:
 			await _scenario_full_battle()
 		"smoke_input":
 			await _scenario_smoke_input()
+		"tenmoku":
+			await _scenario_tenmoku()
 		_:
 			check(false, "unknown scenario '%s'" % scenario)
 	finish()
@@ -966,6 +969,8 @@ func _doctrine() -> Array:
 			their_melee += e.alive
 	# press the advantage: clearly ahead, or the enemy is down to skirmishers
 	var pursue := theirs * 2 < mine or (their_melee * 3 < theirs and mine > theirs) or (mine > theirs * 1.3 and their_melee < 80)
+	if _assault:
+		pursue = true
 	var foes := enemies()
 	var all_foes := foes
 	if not pursue:
@@ -1071,3 +1076,81 @@ func _result_visible() -> bool:
 			return true
 	var b := battle()
 	return b != null and b.result_label != null and b.result_label.visible
+
+
+
+# =====================================================================================
+#  Scenario: tenmoku (uphill assault on a defended ridge, flank by the woodcutters' track)
+# =====================================================================================
+
+func _scenario_tenmoku() -> void:
+	await frames(30)
+	if sim() == null and find_control("BattlesButton") != null:
+		await _menu_flow("CardTenmoku")
+	if not check(await wait_until(func(): return sim() != null, 900), "battle scene loaded"):
+		return
+	var s := sim()
+	var m: MapDef = battle().map
+	check(m.map_name == "tenmoku", "Tenmoku Pass loaded (%s)" % m.map_name)
+	var throat: Vector2 = m.ai_hints.get("pass", Vector2(2420, 1620))
+	var track: Vector2 = m.ai_hints.get("south_track", Vector2(3300, 2380))
+	_ford = throat + Vector2(320, 0)
+	await frames(20)
+	check(s.deploying, "battle opens in deployment")
+	var zone: Rect2 = s.deploy_zones[0]
+	await _deploy_army(zone)
+	var begin := find_control("BeginBattleButton")
+	if begin != null and begin.is_visible_in_tree():
+		await click(begin.get_global_rect().get_center())
+	if s.deploying:
+		await key(KEY_ENTER)
+	check(not s.deploying, "battle begins")
+	var t_begin := s.time
+	await _set_speed(3.0)
+
+	# main body to the mouth of the Throat, out of bow range of the ridge
+	var line: Array = own("yari") + own("samurai").slice(0, 1)
+	var screen: Array = own("yumi") + own("teppo")
+	var flankers: Array = own("cavalry") + own("samurai").slice(1)
+	await set_paused(true)
+	var span := 0.0
+	for r in line:
+		span += r.width() + 30.0
+	var hold_x := throat.x - 420.0
+	await line_move(line, Vector2(hold_x, throat.y - span * 0.5), Vector2(hold_x, throat.y + span * 0.5))
+	await line_move(screen, Vector2(hold_x + 110.0, throat.y - 330.0), Vector2(hold_x + 110.0, throat.y + 330.0))
+	await line_move(own("general"), Vector2(hold_x - 200.0, throat.y - 40.0), Vector2(hold_x - 200.0, throat.y + 40.0))
+	# flanking column down the woodcutters' track (shift-RMB queues the waypoints)
+	await select_regs(flankers)
+	for wp in [Vector2(1650, 2250), Vector2(2150, 2560), Vector2(2750, 2620), track - Vector2(150, -40)]:
+		await ensure_visible([wp], 240)
+		await click(to_screen(wp), MOUSE_BUTTON_RIGHT, true)
+		orders += 1
+	check(flankers.all(func(r): return r.orders.size() >= 3), "flank column queued along the south track (shift-RMB)")
+	await set_paused(false)
+	check(await fight_until(func(): return s.ended or flankers.all(func(r): return r.is_out() or r.is_idle()), 4000),
+		"flankers reach the ridge's right flank")
+	check(s.stat_arrows_fired > 0, "skirmish under way (%d arrows)" % s.stat_arrows_fired)
+
+	# assault: the main body storms the Throat as the flankers hit the line's end
+	_assault = true
+	await set_paused(true)
+	for r in flankers:
+		if not r.is_out():
+			var tgt := nearest(r.mean_pos, enemies("yumi") + enemies("teppo") + enemies("general"))
+			if tgt == null:
+				tgt = nearest(r.mean_pos, enemies())
+			if tgt != null:
+				await attack_with([r], tgt, true)
+	for r in line:
+		if not r.is_out():
+			var t2 := nearest(r.mean_pos, enemies())
+			if t2 != null:
+				await attack_with([r], t2)
+	await set_paused(false)
+	check(await fight_until(func(): return own().any(func(r): return r.engaged > 0) or s.ended, 3000), "assault reaches the enemy line")
+	while not s.ended:
+		await frames(30)
+		await _doctrine_tick()
+		await spectate()
+	await _end_of_battle(t_begin)
