@@ -64,15 +64,15 @@ E2E PASS results scroll offers Main Menu
 E2E INFO scene -> <none> (frame 5281)
 E2E PASS back on the title screen
 E2E INFO scene -> TitleScreen (frame 5282)
-E2E RESULT PASS (18 passed, 0 failed, 5341 frames, 180.6 s wall)
+E2E RESULT PASS (18 passed, 0 failed, 5341 frames, 155.2 s wall)
 WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details).
    at: cleanup (core/object/object.cpp:2536)
 ERROR: 3 resources still in use at exit (run with --verbose for details).
    at: clear (core/io/resource.cpp:822)
 --------------------------------------------------------------------------------
-Done recording movie at path: /var/folders/4w/h9tl4kdn4nv8b_tv22mmbxcr0000gn/T/kassen_rec.llPP7JegjO/run.avi
-5343 frames at 30 FPS (movie length: 00:02:58:03), recorded in 00:03:00 (98% of real-time speed).
-CPU render time: 0.97 seconds (average: 0.18 ms/frame)
+Done recording movie at path: /var/folders/4w/h9tl4kdn4nv8b_tv22mmbxcr0000gn/T/kassen_rec.Xlw8subaeI/run.avi
+5343 frames at 30 FPS (movie length: 00:02:58:03), recorded in 00:02:35 (114% of real-time speed).
+CPU render time: 0.80 seconds (average: 0.15 ms/frame)
 GPU render time: 0.00 seconds (average: 0.00 ms/frame)
-Encoding time: 71.12 seconds (average: 13.31 ms/frame)
+Encoding time: 58.56 seconds (average: 10.96 ms/frame)
 --------------------------------------------------------------------------------
