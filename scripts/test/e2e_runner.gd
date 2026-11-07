@@ -74,6 +74,8 @@ func _process(delta: float) -> void:
 	if nm != _scene_name:
 		log_line("E2E INFO scene -> %s (frame %d)" % [nm, _frames])
 		_scene_name = nm
+	if _frames % 150 == 0 and sim() != null and _args().has("e2e_strength"):
+		log_line("E2E STR t=%.0f %s vs %s" % [sim().time, sim().team_strength(0), sim().team_strength(1)])
 	if _frames % 120 == 0 and sim() != null and _args().has("e2e_debug"):
 		var line := "E2E DBG t=%.0f " % sim().time
 		for r in sim().regiments:
@@ -159,15 +161,18 @@ func _win(p: Vector2) -> Vector2:
 
 
 ## A good on-screen point to click a regiment: the body of the living soldier nearest its centre.
-func reg_point(r: Regiment) -> Vector2:
+func reg_point(r: Regiment, nth := 0) -> Vector2:
+	# nth > 0 picks the soldier nearest a point shifted toward the regiment's rear (a retry
+	# when a neighbour's sprite overlapped the first choice)
 	var s := sim()
 	var best := -1
 	var bd := INF
 	var spos := s.pos
 	var st := s.state
+	var aim := r.mean_pos - r.facing * r.depth() * 0.35 * nth
 	for i in r.soldiers:
 		if st[i] < BattleSim.DEAD:
-			var d := spos[i].distance_squared_to(r.mean_pos)
+			var d := spos[i].distance_squared_to(aim)
 			if d < bd:
 				bd = d
 				best = i
@@ -427,11 +432,20 @@ func select_regs(regs: Array) -> void:
 	var pts: Array = []
 	for r in regs:
 		pts.append(r.mean_pos)
+	# soldiers must be big enough on screen to click reliably
+	if cam().zoom.x < 0.62:
+		await wheel(to_screen(pts[0]), true, 1)
+		await settle()
 	await ensure_visible(pts)
 	var first := true
 	for r in regs:
-		await click(to_screen(reg_point(r)), MOUSE_BUTTON_LEFT, not first)
+		for attempt in 3:
+			await click(to_screen(reg_point(r, attempt)), MOUSE_BUTTON_LEFT, not first)
+			if r.selected:
+				break
 		first = false
+	if not regs.all(func(r): return r.selected):
+		log_line("E2E INFO selection incomplete: %d/%d" % [regs.filter(func(r): return r.selected).size(), regs.size()])
 
 
 func attack_with(regs: Array, target: Regiment, run := false) -> void:
@@ -453,8 +467,11 @@ func line_move(regs: Array, a: Vector2, b: Vector2) -> void:
 
 
 func set_paused(on: bool) -> void:
+	# P (also bound to toggle_pause): Space doubles as ui_accept for any focused HUD button
 	if sim().paused != on:
-		await key(KEY_SPACE)
+		await key(KEY_P)
+	if sim().paused != on:
+		log_line("E2E INFO pause toggle did not take (wanted %s)" % on)
 
 
 func casualties(team: int) -> int:
@@ -693,7 +710,7 @@ func _battle_plan() -> void:
 	var ford: Vector2 = battle().map.ai_hints.get("ford", Vector2(2665, 1645))
 	_ford = ford
 
-	await wheel(Vector2(900, 470), false, 3)
+	await wheel(Vector2(900, 470), false, 2)
 	await settle()
 	# --- race to the ford and hold its west exit in an arc: the enemy must come through the
 	#     shallows in column, under our bows and guns, into a hedge of braced spears
@@ -708,7 +725,7 @@ func _battle_plan() -> void:
 	await line_move(bows + guns, Vector2(exit_x - 200.0, ford.y - 300.0), Vector2(exit_x - 200.0, ford.y + 300.0))
 	await key(KEY_R)
 	await line_move(cav, Vector2(exit_x - 560.0, ford.y - 560.0), Vector2(exit_x - 560.0, ford.y + 560.0))
-	await line_move(own("general"), Vector2(exit_x - 580.0, ford.y - 60.0), Vector2(exit_x - 580.0, ford.y + 60.0))
+	await line_move(own("general"), Vector2(exit_x - 600.0, ford.y - 60.0), Vector2(exit_x - 600.0, ford.y + 60.0))
 	check(line.all(func(r): return not r.is_idle()), "battle line advances (RMB-drag)")
 	await set_paused(false)
 	await _set_speed(3.0)
@@ -849,7 +866,7 @@ func _doctrine_tick() -> void:
 			await click(to_screen(e[1]), MOUSE_BUTTON_RIGHT)
 			orders += 1
 		elif not e[1].is_out():
-			await attack_with([e[0]], e[1], e[0].is_mounted())
+			await attack_with([e[0]], e[1], e[2] if e.size() > 2 else e[0].is_mounted())
 	glide = 12
 	await set_paused(false)
 
@@ -879,7 +896,12 @@ func _doctrine() -> Array:
 	var out: Array = []
 	var mine := s.team_strength(0).x
 	var theirs := s.team_strength(1).x
-	var pursue := theirs * 2 < mine
+	var their_melee := 0
+	for e in enemies():
+		if not e.is_ranged():
+			their_melee += e.alive
+	# press the advantage: clearly ahead, or the enemy is down to skirmishers
+	var pursue := theirs * 2 < mine or (their_melee * 3 < theirs and mine > theirs) or (mine > theirs * 1.3 and their_melee < 80)
 	var foes := enemies()
 	var all_foes := foes
 	if not pursue:
@@ -911,6 +933,19 @@ func _doctrine() -> Array:
 			# the melee threat has passed: step back out in front of the line to answer their bows
 			out.append([r, Vector2(_line_x() + 210.0, r.mean_pos.y)])
 			continue
+		elif r.is_ranged() and r.under_fire_t < 2.0 and not pursue:
+			# losing an archery duel (outnumbered by bows in range): step back out of their reach
+			var their_bows: Array = all_foes.filter(func(f): return f.is_ranged() and f.mean_pos.distance_to(r.mean_pos) < f.get_range() + 40.0)
+			var their_n := 0
+			for f in their_bows:
+				their_n += f.alive
+			if their_n > r.alive * 1.4:
+				var sh2 := nearest(r.mean_pos, their_bows)
+				out.append([r, r.mean_pos + (r.mean_pos - sh2.mean_pos).normalized() * 260.0])
+				continue
+			var inr2: Array = all_foes.filter(func(f): return f.mean_pos.distance_to(r.mean_pos) < r.get_range() * 0.95)
+			if not inr2.is_empty() and cur == null:
+				want = nearest(r.mean_pos, inr2)
 		elif r.is_ranged():
 			var inr: Array = all_foes.filter(func(f): return f.mean_pos.distance_to(r.mean_pos) < r.get_range() * 0.95)
 			# shoot what stands still (dense, static blocks): kiting skirmishers are a waste of arrows
@@ -931,20 +966,26 @@ func _doctrine() -> Array:
 				out.append([r, r.mean_pos + away * 220.0])
 				continue
 		elif r.type_key == "yari":
+			var busy_y: Array = foes.filter(func(f): return f.engaged > 0 and f.mean_pos.distance_to(r.mean_pos) < 450.0)
 			if d < 170.0 and not e.is_mounted():
 				want = e
+			elif not busy_y.is_empty():
+				want = nearest(r.mean_pos, busy_y)   # help the neighbours already fighting
 		elif r.type_key == "samurai":
 			var busy: Array = foes.filter(func(f): return f.engaged > 0 and f.mean_pos.distance_to(r.mean_pos) < 500.0)
 			if not busy.is_empty():
 				want = nearest(r.mean_pos, busy)
 			elif d < 200.0:
 				want = e
+		elif r.is_mounted() and foes.any(func(f): return f.type == UnitTypes.GENERAL and f.mean_pos.distance_to(r.mean_pos) < 1000.0):
+			want = foes.filter(func(f): return f.type == UnitTypes.GENERAL)[0]   # go for their general
 		elif r.is_mounted():
 			var soft: Array = foes.filter(func(f): return (f.is_ranged() or f.engaged > 0) and f.mean_pos.distance_to(r.mean_pos) < 900.0)
 			if not soft.is_empty():
 				want = nearest(r.mean_pos, soft)
 		if want != null and want != cur:
-			out.append([r, want])
+			# run down skirmishers and routers; walk into formed lines
+			out.append([r, want, r.is_mounted() or want.is_ranged() or want.is_routing() or pursue])
 	return out
 
 

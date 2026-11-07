@@ -4,7 +4,7 @@
 #   e.g. tools/record.sh full_battle proof/e2e_full_battle.mp4   (E2E_MENU=1 to start from the title)
 # Runs through tools/render_run.sh (off-screen unless KASSEN_VISIBLE=1) with Godot's Movie Maker
 # (--write-movie, --fixed-fps 30: frame-perfect and deterministic, slower than real time), then
-# converts with ffmpeg (crf 20, yuv420p, faststart). Exit code: 0 if the log contains
+# converts with ffmpeg (crf 22 or $CRF, yuv420p, faststart). Exit code: 0 if the log contains
 # "E2E RESULT PASS", 1 if the scenario failed, 2 if the recording/encode failed.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,7 +24,7 @@ grep -q "E2E RESULT PASS" "$LOG" && rc=0
 if [ ! -s "$AVI" ]; then
   echo "record.sh: no movie was written" >&2; rm -rf "$TMPDIR_REC"; exit 2
 fi
-if ! ffmpeg -y -v error -i "$AVI" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p \
+if ! ffmpeg -y -v error -i "$AVI" -c:v libx264 -preset slow -crf ${CRF:-22} -pix_fmt yuv420p \
      -c:a aac -b:a 160k -movflags +faststart "$OUT"; then
   echo "record.sh: ffmpeg encode failed" >&2; rm -rf "$TMPDIR_REC"; exit 2
 fi
