@@ -323,8 +323,10 @@ func key(code: Key, ctrl := false, hold := 2, shift := false) -> void:
 
 ## Pans with the arrow keys until every world point is inside SAFE (zooming out with the wheel if
 ## they can't all fit). Real keyboard input; returns true when visible.
-func ensure_visible(pts: Array, max_frames := 360) -> bool:
+func ensure_visible(pts: Array, max_frames := 360, area := Rect2()) -> bool:
 	var SAFE := SAFE_DEPLOY if (sim() != null and sim().deploying) else SAFE_BATTLE
+	if area.size != Vector2.ZERO:
+		SAFE = area
 	for attempt in max_frames / 6:
 		var rect := Rect2(to_screen(pts[0]), Vector2.ZERO)
 		for p in pts:
@@ -583,9 +585,11 @@ func _scenario_smoke_input() -> void:
 # =====================================================================================
 
 ## Title → battle select → briefing, clicking the real buttons (only when booted into the menus).
-func _menu_flow() -> void:
-	for step in [["BattlesButton", "title: Battles"], ["CardKurogawa", "select: Kurogawa card"],
-			["DifficultyNormal", "select: difficulty Normal"], ["BeginButton", "select: Begin"],
+func _menu_flow(card := "CardKurogawa") -> void:
+	var diff := String(_args().get("e2e_difficulty", "normal")).capitalize()
+	log_line("E2E INFO menu flow: %s, difficulty %s" % [card, diff])
+	for step in [["BattlesButton", "title: Battles"], [card, "select: %s card" % card],
+			["Difficulty" + diff, "select: difficulty " + diff], ["BeginButton", "select: Begin"],
 			["ContinueButton", "briefing: Continue"]]:
 		var ok := await wait_until(func():
 			var c := find_control(step[0])
@@ -682,6 +686,53 @@ func _deploy_army(zone: Rect2) -> void:
 	for r in own():
 		inside = inside and zone.grow(4.0).has_point(r.centre)
 	check(inside, "whole army deployed inside the zone")
+
+
+# ---- streamer camera: zoom in on the action between orders (keys + wheel only) -----------
+
+const CENTRE := Rect2(700, 330, 520, 300)
+var _last_spectate := -999
+
+## Where the action is: the biggest melee, else the closest pair of opposing regiments.
+func hotspot() -> Vector2:
+	var s := sim()
+	var best := Vector2.INF
+	var most := 0
+	for r in s.regiments:
+		if r.engaged > most and not r.is_out():
+			most = r.engaged
+			best = r.mean_pos
+	if best != Vector2.INF:
+		return best
+	var bd := INF
+	for a in own():
+		for e in enemies():
+			var d: float = a.mean_pos.distance_to(e.mean_pos)
+			if d < bd:
+				bd = d
+				best = (a.mean_pos * 0.65 + e.mean_pos * 0.35)
+	return best if best != Vector2.INF else cam().position
+
+
+## Pan (arrow keys) so `world` is near the screen centre, then wheel to roughly `z`.
+func focus(world: Vector2, z := 1.4) -> void:
+	await ensure_visible([world], 240, CENTRE)
+	var c := cam()
+	for k in 8:
+		if c.zoom.x < z / 1.12:
+			await wheel(to_screen(world), true, 1)
+		elif c.zoom.x > z * 1.12:
+			await wheel(to_screen(world), false, 1)
+		else:
+			break
+	await settle()
+
+
+func spectate(every := 150) -> void:
+	if _frames - _last_spectate < every or sim() == null or sim().ended:
+		return
+	_last_spectate = _frames
+	await focus(hotspot(), 1.45)
 
 
 func _set_speed(x: float) -> void:
@@ -825,6 +876,7 @@ func _battle_plan() -> void:
 		if tick % 10 == 0:
 			log_line("E2E INFO t=%.0fs standing %s vs %s" % [s.time, s.team_strength(0), s.team_strength(1)])
 		await _doctrine_tick()
+		await spectate()
 	await _end_of_battle(t_begin)
 
 
@@ -840,6 +892,7 @@ func fight_until(cond: Callable, max_frames: int) -> bool:
 		k += 10
 		if k % 30 == 0:
 			await _doctrine_tick()
+			await spectate()
 	return cond.call()
 
 
@@ -885,6 +938,17 @@ func _end_of_battle(t_begin: float) -> void:
 	await frames(120)
 	for l in lines:
 		log_line(l)
+	# results scroll -> Main Menu -> title
+	var ok_btn := await wait_until(func():
+		var b := find_control("MenuButton")
+		return b != null and b.is_visible_in_tree(), 600)
+	if check(ok_btn, "results scroll offers Main Menu"):
+		await frames(45)
+		await click(find_control("MenuButton").get_global_rect().get_center())
+		check(await wait_until(func():
+			var t := find_control("BattlesButton")
+			return t != null and t.is_visible_in_tree(), 600), "back on the title screen")
+		await frames(60)
 
 
 ## Orders worth giving now: [[own regiment, enemy regiment], ...]. Missiles shoot what is in
