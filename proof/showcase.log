@@ -1,0 +1,27 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Metal 4.0 - Forward+ - Using Device #0: Apple - Apple M5 (Apple9)
+
+Movie Maker mode enabled, recording movie in 1920×1080 @ 30 FPS...
+E2E START showcase
+E2E INFO scene -> <none> (frame 1)
+E2E PASS battle scene loaded
+E2E INFO scene -> Battle (frame 2)
+[AI t=3.0] AIGeneral online: team 1, difficulty normal, ford (2665.0, 1645.0), high ground (3800.0, 1700.0), map posture attack
+[AI t=3.0] posture ATTACK (stronger or even; strength 1.00, ranged 1.00, crossing true)
+[AI t=21.4] posture ATTACK -> DEFEND (holding the ford, enemy at the river; strength 1.04, ranged 1.00, crossing true)
+[AI t=66.4] enemy near the hidden ford at (2668.0, 393.0): Yari Ashigaru sent to guard it
+[AI t=134.2] enemy near the hidden ford at (2668.0, 393.0): Yari Ashigaru sent to guard it
+E2E PASS battle reached a result (winner 0)
+E2E PASS victory banner / results shown
+E2E RESULT PASS (3 passed, 0 failed, 2543 frames, 272.3 s wall)
+WARNING: 32 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 13 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+--------------------------------------------------------------------------------
+Done recording movie at path: /var/folders/4w/h9tl4kdn4nv8b_tv22mmbxcr0000gn/T/kassen_rec.wZl1EuJv4E/run.avi
+2545 frames at 30 FPS (movie length: 00:01:24:25), recorded in 00:04:33 (30% of real-time speed).
+CPU render time: 1.16 seconds (average: 0.46 ms/frame)
+GPU render time: 0.00 seconds (average: 0.00 ms/frame)
+Encoding time: 123.98 seconds (average: 48.71 ms/frame)
+--------------------------------------------------------------------------------

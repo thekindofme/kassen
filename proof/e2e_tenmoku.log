@@ -1,0 +1,78 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Metal 4.0 - Forward+ - Using Device #0: Apple - Apple M5 (Apple9)
+
+Movie Maker mode enabled, recording movie in 1920×1080 @ 30 FPS...
+E2E START tenmoku
+E2E INFO scene -> <none> (frame 1)
+E2E INFO scene -> TitleScreen (frame 2)
+E2E INFO menu flow: CardTenmoku, difficulty Normal
+E2E PASS title: Battles
+E2E INFO scene -> <none> (frame 76)
+E2E INFO scene -> BattleSelect (frame 77)
+E2E PASS select: CardTenmoku card
+E2E PASS select: difficulty Normal
+E2E PASS select: Begin
+E2E INFO scene -> <none> (frame 274)
+E2E INFO scene -> Briefing (frame 275)
+E2E PASS briefing: Continue
+E2E INFO scene -> <none> (frame 340)
+E2E INFO scene -> Battle (frame 341)
+[AI t=0.0] deployed team 1: line of 5 at (3740.0, 1500.0) facing (-1.0, 0.0) (3 missiles ahead, 2 cavalry on the wings)
+E2E PASS battle scene loaded
+E2E PASS Tenmoku Pass loaded (tenmoku)
+E2E PASS battle opens in deployment
+E2E PASS whole army deployed inside the zone
+E2E PASS battle begins
+E2E PASS flank column queued along the south track (shift-RMB)
+[AI t=3.1] AIGeneral online: team 1, difficulty normal, ford (inf, inf), high ground (3800.0, 1500.0), map posture defend
+[AI t=3.1] posture ATTACK -> DEFEND (holding the high ground; strength 1.01, ranged 1.00, crossing false)
+E2E PASS flankers reach the ridge's right flank
+E2E PASS skirmish under way (323 arrows)
+E2E PASS assault reaches the enemy line
+[AI t=140.9] enemy is passive for 138 s: abandoning DEFEND
+[AI t=140.9] posture DEFEND -> ATTACK (enemy passive; strength 0.92, ranged 1.04, crossing false)
+[AI t=147.2] attack phase approach -> soften (line formed at bow range)
+[AI t=155.6] attack phase soften -> assault (enemy closed in after 8 s)
+[AI t=157.7] posture ATTACK -> DEFEND (outmatched; strength 0.79, ranged 0.97, crossing false)
+[AI t=157.7] attack phase assault -> approach (posture DEFEND)
+E2E PASS victory for the player (winner 0)
+E2E PASS result screen visible
+E2E REG 0 cavalry  kills   0 lost  20/20 Wavering
+E2E REG 0 yari     kills  37 lost  60/60 Shattered
+E2E REG 0 samurai  kills  85 lost  32/32 Wavering
+E2E REG 0 yari     kills  51 lost  32/60 Eager
+E2E REG 0 samurai  kills  33 lost  32/32 Shattered
+E2E REG 0 yari     kills  71 lost  14/60 Eager
+E2E REG 0 cavalry  kills   7 lost  20/20 Shattered
+E2E REG 0 teppo    kills  50 lost  27/40 Wavering
+E2E REG 0 yumi     kills   6 lost  40/40 Shattered
+E2E REG 0 yumi     kills  27 lost  18/40 Steady
+E2E REG 0 general  kills   0 lost   0/12 Eager
+E2E REG 1 cavalry  kills   5 lost  20/20 Shattered
+E2E REG 1 yari     kills  35 lost  60/60 Wavering
+E2E REG 1 samurai  kills  37 lost  32/32 Steady
+E2E REG 1 yari     kills   6 lost  60/60 Wavering
+E2E REG 1 samurai  kills  53 lost  32/32 Steady
+E2E REG 1 yari     kills  54 lost  51/60 Shattered
+E2E REG 1 cavalry  kills  20 lost  20/20 Steady
+E2E REG 1 teppo    kills  32 lost  40/40 Wavering
+E2E REG 1 yumi     kills  18 lost  40/40 Steady
+E2E REG 1 yumi     kills  16 lost   4/40 Routing
+E2E REG 1 general  kills   0 lost   0/12 Routing
+E2E SUMMARY duration 166 s game time | Hino lost 295/416 | Mizuno lost 359/416 | orders issued 40
+E2E PASS results scroll offers Main Menu
+E2E INFO scene -> <none> (frame 5281)
+E2E PASS back on the title screen
+E2E INFO scene -> TitleScreen (frame 5282)
+E2E RESULT PASS (18 passed, 0 failed, 5341 frames, 180.6 s wall)
+WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 3 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+--------------------------------------------------------------------------------
+Done recording movie at path: /var/folders/4w/h9tl4kdn4nv8b_tv22mmbxcr0000gn/T/kassen_rec.llPP7JegjO/run.avi
+5343 frames at 30 FPS (movie length: 00:02:58:03), recorded in 00:03:00 (98% of real-time speed).
+CPU render time: 0.97 seconds (average: 0.18 ms/frame)
+GPU render time: 0.00 seconds (average: 0.00 ms/frame)
+Encoding time: 71.12 seconds (average: 13.31 ms/frame)
+--------------------------------------------------------------------------------
