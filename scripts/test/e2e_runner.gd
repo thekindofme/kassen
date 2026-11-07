@@ -332,6 +332,7 @@ func ensure_visible(pts: Array, max_frames := 360, area := Rect2()) -> bool:
 	var SAFE := SAFE_DEPLOY if (sim() != null and sim().deploying) else SAFE_BATTLE
 	if area.size != Vector2.ZERO:
 		SAFE = area
+	var stuck := 0
 	for attempt in max_frames / 6:
 		var rect := Rect2(to_screen(pts[0]), Vector2.ZERO)
 		for p in pts:
@@ -365,6 +366,12 @@ func ensure_visible(pts: Array, max_frames := 360, area := Rect2()) -> bool:
 		for k in keys:
 			_key_state(k, false)
 		await settle()
+		if cam().position.distance_to(cp0) < 0.5:
+			stuck += 1
+			if stuck >= 2:
+				return false   # the camera is clamped at the map edge: accept what we have
+		else:
+			stuck = 0
 	await frames(10)
 	return false
 
