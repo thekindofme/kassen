@@ -1,0 +1,77 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Metal 4.0 - Forward+ - Using Device #0: Apple - Apple M5 (Apple9)
+
+Movie Maker mode enabled, recording movie in 1920×1080 @ 30 FPS...
+E2E START full_battle
+E2E INFO scene -> <none> (frame 1)
+E2E INFO scene -> Battle (frame 2)
+[AI t=0.0] deployed team 1: line of 5 at (3740.0, 1700.0) facing (-1.0, 0.0) (3 missiles ahead, 2 cavalry on the wings)
+E2E PASS battle scene loaded
+E2E PASS battle opens in deployment
+E2E PASS box-select picks two regiments (3 selected)
+E2E PASS RMB-drag redeploys inside the zone
+E2E PASS line faces the enemy
+E2E PASS whole army deployed inside the zone
+E2E PASS battle begins
+E2E PASS camera pans with WASD
+E2E PASS wheel zooms out
+[AI t=3.0] AIGeneral online: team 1, difficulty normal, ford (2665.0, 1645.0), high ground (3800.0, 1700.0), map posture attack
+[AI t=3.0] posture ATTACK (stronger or even; strength 1.01, ranged 1.00, crossing true)
+E2E PASS spears run to the ford (RMB-drag + R)
+E2E PASS battle line advances (RMB-drag)
+[AI t=9.3] posture ATTACK -> DEFEND (holding the ford, enemy at the river; strength 1.07, ranged 1.00, crossing true)
+[AI t=65.2] enemy is passive for 56 s: abandoning DEFEND
+[AI t=65.2] posture DEFEND -> ATTACK (enemy passive; strength 1.01, ranged 1.00, crossing true)
+[AI t=65.2] enemy holds the main ford: swinging round through the hidden ford at (2545.0, 385.0)
+E2E PASS archers ordered onto Teppo Ashigaru
+E2E PASS archers loose volleys (37 arrows)
+E2E PASS enemy casualties rise (11)
+E2E PASS double-RMB sends the cavalry at the run
+[AI t=88.3] enemy near the hidden ford at (2668.0, 393.0): Yari Cavalry sent to guard it
+E2E PASS cavalry charge lands (69 impacts)
+E2E PASS melee engaged
+E2E PASS F toggles fire at will
+E2E PASS R toggles run
+E2E PASS H halts
+[AI t=115.6] hidden ford quiet: Yari Cavalry rejoins the army
+E2E INFO t=122s standing (233, 416) vs (162, 416)
+[AI t=147.1] ALL-OUT ATTACK: enemy broken (35% standing)
+[AI t=147.1] attack phase approach -> assault (all-out)
+E2E INFO t=154s standing (96, 416) vs (110, 416)
+E2E PASS victory for the player (winner 0)
+E2E PASS result screen visible
+E2E REG 0 cavalry  kills  12 lost  20/20 Steady
+E2E REG 0 yari     kills  14 lost  58/60 Shattered
+E2E REG 0 samurai  kills  74 lost  32/32 Steady
+E2E REG 0 yari     kills  46 lost  60/60 Shattered
+E2E REG 0 samurai  kills  61 lost  32/32 Steady
+E2E REG 0 yari     kills  17 lost  60/60 Shattered
+E2E REG 0 cavalry  kills   7 lost  20/20 Wavering
+E2E REG 0 teppo    kills  45 lost   8/40 Eager
+E2E REG 0 yumi     kills  45 lost  20/40 Wavering
+E2E REG 0 yumi     kills  19 lost  18/40 Steady
+E2E REG 0 general  kills   0 lost   0/12 Eager
+E2E REG 1 cavalry  kills   9 lost  20/20 Shattered
+E2E REG 1 yari     kills  26 lost  60/60 Shattered
+E2E REG 1 samurai  kills  63 lost  32/32 Steady
+E2E REG 1 yari     kills  39 lost  60/60 Wavering
+E2E REG 1 samurai  kills  53 lost  16/32 Steady
+E2E REG 1 yari     kills  22 lost  60/60 Wavering
+E2E REG 1 cavalry  kills  46 lost   2/20 Steady
+E2E REG 1 teppo    kills   0 lost  40/40 Wavering
+E2E REG 1 yumi     kills  22 lost   4/40 Eager
+E2E REG 1 yumi     kills   8 lost   3/40 Eager
+E2E REG 1 general  kills   3 lost  12/12 Eager
+E2E SUMMARY duration 154 s game time | Hino lost 328/416 | Mizuno lost 309/416 | orders issued 36
+E2E RESULT PASS (22 passed, 0 failed, 4448 frames, 164.2 s wall)
+WARNING: 68 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 31 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+--------------------------------------------------------------------------------
+Done recording movie at path: /var/folders/4w/h9tl4kdn4nv8b_tv22mmbxcr0000gn/T/kassen_rec.5p5rwicQvx/run.avi
+4450 frames at 30 FPS (movie length: 00:02:28:10), recorded in 00:02:44 (90% of real-time speed).
+CPU render time: 0.77 seconds (average: 0.17 ms/frame)
+GPU render time: 0.00 seconds (average: 0.00 ms/frame)
+Encoding time: 53.24 seconds (average: 11.96 ms/frame)
+--------------------------------------------------------------------------------
