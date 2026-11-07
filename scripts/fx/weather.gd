@@ -1,7 +1,8 @@
 class_name BattleWeather
 extends Node2D
-## Atmosphere + post-process for the battlefield (post_grade.gdshader): drifting cloud shadows,
-## low-lying mist that pools in valleys/over the river and thins over time, and a filmic grade
+## Atmosphere + post-process for the battlefield: ground mist (fx_mist.gdshader, a layer inserted
+## just below SoldierRenderer so units always stay crisp) that pools in hollows/forest edges and
+## clears over time, and (post_grade.gdshader) drifting cloud shadows and a filmic grade
 ## (lacquer reds, muted ground), bloom on highlights, vignette and fine grain.
 ##
 ## The pass is a world-space rect that tracks the view and sits at the top z of the world canvas,
@@ -19,7 +20,8 @@ extends Node2D
 @export_group("Mist")
 @export_range(0.0, 1.0) var mist_density := 0.0       ## at battle start
 @export_range(0.0, 1.0) var mist_min := 0.08          ## what is left after mist_clear_time
-@export var mist_clear_time := 300.0                  ## sim seconds for the mist to thin out
+@export var mist_clear_time := 135.0                  ## sim seconds for the mist to thin out
+@export_range(0.0, 1.0) var mist_max_alpha := 0.62   ## peak opacity of a bank (on the ground only)
 @export var mist_color := Color(0.84, 0.87, 0.86)
 @export_group("Grade")
 @export var exposure := 1.1
@@ -40,6 +42,8 @@ var sim: BattleSim
 var terrain: Terrain
 var post: ColorRect
 var mat: ShaderMaterial
+var mist: ColorRect
+var mist_mat: ShaderMaterial
 
 
 func setup(p_sim: BattleSim, p_terrain: Terrain, args: Dictionary = {}) -> void:
@@ -47,9 +51,9 @@ func setup(p_sim: BattleSim, p_terrain: Terrain, args: Dictionary = {}) -> void:
 	terrain = p_terrain
 	if terrain != null and terrain.map != null:
 		if terrain.map.get("mist") == true:
-			mist_density = 0.75
-			mist_min = 0.14
-			mist_clear_time = 420.0
+			mist_density = 1.0
+			mist_min = 0.0
+			mist_clear_time = 135.0
 		apply_time_of_day(String(terrain.map.get("time_of_day")) if terrain.map.get("time_of_day") != null else "day")
 		var w = terrain.map.get("weather")
 		if w is Dictionary:
@@ -81,18 +85,40 @@ func setup(p_sim: BattleSim, p_terrain: Terrain, args: Dictionary = {}) -> void:
 	post.z_as_relative = false
 	post.z_index = RenderingServer.CANVAS_ITEM_Z_MAX
 	add_child(post)
+	_build_mist()
+
+
+## Mist rect goes into the battle root right before SoldierRenderer: above terrain and low props,
+## below corpses, soldiers, banners and tree canopies.
+func _build_mist() -> void:
+	mist_mat = ShaderMaterial.new()
+	mist_mat.shader = load("res://scripts/render/shaders/fx_mist.gdshader")
+	mist_mat.set_shader_parameter("mist_tex", mat.get_shader_parameter("mist_tex"))
+	mist_mat.set_shader_parameter("height_tex", mat.get_shader_parameter("height_tex"))
+	mist_mat.set_shader_parameter("map_size", sim.map_size)
+	mist = ColorRect.new()
+	mist.name = "GroundMist"
+	mist.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mist.material = mist_mat
+	var root := get_parent().get_parent() if get_parent() != null else null
+	var renderer: Node = root.get_node_or_null("SoldierRenderer") if root != null else null
+	if renderer != null:
+		root.add_child(mist)
+		root.move_child(mist, renderer.get_index())
+	else:
+		add_child(mist)
 
 
 ## Grade presets per MapDef.time_of_day. Called from setup(); exported vars stay tweakable after.
 func apply_time_of_day(tod: String) -> void:
 	match tod:
 		"dawn":
-			exposure = 1.04
-			shadow_tint = Color(0.9, 0.94, 1.08)
-			highlight_tint = Color(1.07, 1.0, 0.92)
-			mist_color = Color(0.86, 0.87, 0.9)
-			cloud_tint = Color(0.8, 0.86, 1.02)
-			saturation = 0.94
+			exposure = 1.08
+			shadow_tint = Color(0.93, 0.95, 1.05)
+			highlight_tint = Color(1.09, 1.01, 0.9)
+			mist_color = Color(0.9, 0.88, 0.86)
+			cloud_tint = Color(0.84, 0.88, 1.0)
+			saturation = 0.98
 		"dusk":
 			exposure = 0.98
 			shadow_tint = Color(0.9, 0.9, 1.06)
@@ -117,21 +143,32 @@ func current_mist() -> float:
 	if sim == null or mist_density <= 0.0:
 		return 0.0
 	var k := clampf(sim.time / maxf(mist_clear_time, 1.0), 0.0, 1.0)
-	return lerpf(mist_density, minf(mist_min, mist_density), k * k * (3.0 - 2.0 * k))
+	return lerpf(mist_density, minf(mist_min, mist_density), k)
 
 
 func _process(_delta: float) -> void:
 	if post == null:
 		return
-	post.visible = post_enabled
-	if not post_enabled:
-		return
 	var vp := get_viewport()
 	var view := vp.get_canvas_transform().affine_inverse() * Rect2(Vector2.ZERO, vp.get_visible_rect().size)
 	view = view.grow(maxf(view.size.x, view.size.y) * 0.3)
+	var t := sim.time + sim.alpha * BattleSim.DT
+	var ma := current_mist()
+	if mist != null:
+		mist.visible = ma > 0.001
+		if mist.visible:
+			mist.position = view.position
+			mist.size = view.size
+			mist_mat.set_shader_parameter("t", t)
+			mist_mat.set_shader_parameter("wind", wind)
+			mist_mat.set_shader_parameter("amount", ma)
+			mist_mat.set_shader_parameter("mist_color", mist_color)
+			mist_mat.set_shader_parameter("max_alpha", mist_max_alpha)
+	post.visible = post_enabled
+	if not post_enabled:
+		return
 	post.position = view.position
 	post.size = view.size
-	var t := sim.time + sim.alpha * BattleSim.DT
 	mat.set_shader_parameter("t", t)
 	mat.set_shader_parameter("wind", wind)
 	mat.set_shader_parameter("cloud_strength", cloud_strength)
@@ -139,7 +176,7 @@ func _process(_delta: float) -> void:
 	mat.set_shader_parameter("cloud_softness", cloud_softness)
 	mat.set_shader_parameter("cloud_scale", cloud_scale)
 	mat.set_shader_parameter("cloud_tint", cloud_tint)
-	mat.set_shader_parameter("mist_amount", current_mist())
+	mat.set_shader_parameter("mist_amount", 0.0)   # mist lives in the ground layer now
 	mat.set_shader_parameter("mist_color", mist_color)
 	mat.set_shader_parameter("exposure", exposure)
 	mat.set_shader_parameter("contrast", contrast)
