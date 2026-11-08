@@ -6,3 +6,7 @@ art_src/test/
 proof/*.mp4
 proof/*.avi
 proof/share/
+build/
+# Local logs and scratch output under art_src (raw audio downloads are ignored by art_src/audio_dl/.gitignore)
+art_src/**/*.log
+.DS_Store

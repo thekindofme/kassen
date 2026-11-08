@@ -19,6 +19,8 @@ BOOT="--battle"
 [ "${E2E_MENU:-0}" = "1" ] && BOOT=""   # E2E_MENU=1: start at the title and click through the menus
 "$ROOT/tools/render_run.sh" --write-movie "$AVI" --fixed-fps 30 --resolution 1920x1080 \
   -- $BOOT --e2e="$SCENARIO" "$@" 2>&1 | tee "$LOG"
+# Keep the local temp path out of the (committed) log.
+sed "s#${TMPDIR_REC}/#<tmp>/#g" "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
 rc=1
 grep -q "E2E RESULT PASS" "$LOG" && rc=0
 if [ ! -s "$AVI" ]; then

@@ -69,7 +69,7 @@ WARNING: 68 ObjectDB instances were leaked at exit (run with `--verbose` for det
 ERROR: 31 resources still in use at exit (run with --verbose for details).
    at: clear (core/io/resource.cpp:822)
 --------------------------------------------------------------------------------
-Done recording movie at path: /var/folders/4w/h9tl4kdn4nv8b_tv22mmbxcr0000gn/T/kassen_rec.5p5rwicQvx/run.avi
+Done recording movie at path: <tmp>/run.avi
 4450 frames at 30 FPS (movie length: 00:02:28:10), recorded in 00:02:44 (90% of real-time speed).
 CPU render time: 0.77 seconds (average: 0.17 ms/frame)
 GPU render time: 0.00 seconds (average: 0.00 ms/frame)
