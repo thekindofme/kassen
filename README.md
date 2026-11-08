@@ -9,6 +9,10 @@ matchlock smoke, morale, routs and a general whose death can break an army.
 
 ## Play
 
+**▶ Play in your browser: https://thekindofme.github.io/kassen/play/** (desktop, keyboard and mouse, ~100 MB). Website: https://thekindofme.github.io/kassen/
+
+Or run from source with [Godot 4.7](https://godotengine.org):
+
 ```bash
 godot --path .   # from the repository root
 ```
@@ -59,14 +63,14 @@ tools/tmo 200 godot --headless --path . -- --e2e=smoke_input --battle    # 23 ch
 E2E_MENU=1 tools/record.sh full_battle proof/e2e_full_flow_kurogawa.mp4  # full menu-to-menu recorded run
 ```
 
-Recordings in `proof/` (720p shareable copies are in `proof/share/`; logs are committed):
+Proof recordings are attached to the [v1.0.0 release](https://github.com/thekindofme/kassen/releases/tag/v1.0.0); their logs are in `proof/`:
 
 | Video | What it proves | Result |
 |---|---|---|
-| `e2e_full_flow_kurogawa.mp4` | Title → select → briefing → deploy → battle → **victory** → results → back to title, all through mouse and keyboard events | 29/29 PASS |
-| `e2e_tenmoku.mp4` | The same flow on Tenmoku Pass: an uphill attack through mist with a flanking track | 18/18 PASS |
-| `e2e_full_battle.mp4` | Battle-level run: selection, formation drags, archers, cavalry charge, hotkeys, victory | 22/22 PASS |
-| `showcase.mp4` | Cinematic AI-vs-AI battle with a director camera at close zoom | PASS |
+| [`e2e_full_flow_kurogawa`](https://github.com/thekindofme/kassen/releases/download/v1.0.0/e2e_full_flow_kurogawa_720p.mp4) | Title → select → briefing → deploy → battle → **victory** → results → back to title, all through mouse and keyboard events | 29/29 PASS |
+| [`e2e_tenmoku`](https://github.com/thekindofme/kassen/releases/download/v1.0.0/e2e_tenmoku_720p.mp4) | The same flow on Tenmoku Pass: an uphill attack through mist with a flanking track | 18/18 PASS |
+| [`e2e_full_battle`](https://github.com/thekindofme/kassen/releases/download/v1.0.0/e2e_full_battle_720p.mp4) | Battle-level run: selection, formation drags, archers, cavalry charge, hotkeys, victory | 22/22 PASS |
+| [`showcase`](https://github.com/thekindofme/kassen/releases/download/v1.0.0/showcase_720p.mp4) | Cinematic AI-vs-AI battle with a director camera at close zoom | PASS |
 
 The recordings are frame-perfect captures of the running game (`--write-movie`, fixed 30 fps). A fake cursor
 shows every injected click and drag.
