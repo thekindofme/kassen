@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KASSEN 合戦 — Fields of the Warring States</title>
+<meta name="description" content="KASSEN is a free, open-source 2D real-time tactical battle game set in Sengoku Japan, 1574. Command about 830 individually simulated soldiers against an AI warlord. Play it in your browser.">
+<meta name="theme-color" content="#14100d">
+<link rel="canonical" href="https://thekindofme.github.io/kassen/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="KASSEN 合戦">
+<meta property="og:title" content="KASSEN 合戦 — Fields of the Warring States">
+<meta property="og:description" content="Real-time Sengoku battles with ~830 individually simulated soldiers, formations, charges, matchlock smoke, morale and routs. Free and open source. Play in your browser.">
+<meta property="og:url" content="https://thekindofme.github.io/kassen/">
+<meta property="og:image" content="https://thekindofme.github.io/kassen/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A samurai general on a white horse watches a battle under a red sun, crimson banners around him.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="KASSEN 合戦 — Fields of the Warring States">
+<meta name="twitter:description" content="Real-time Sengoku battles with ~830 individually simulated soldiers. Free, open source, playable in the browser.">
+<meta name="twitter:image" content="https://thekindofme.github.io/kassen/img/og.jpg">
+<meta name="twitter:image:alt" content="A samurai general on a white horse watches a battle under a red sun.">
+
+<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="128x128" href="img/favicon-128.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+
+<link rel="preload" href="fonts/ShipporiMinchoB1-ExtraBold.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="fonts/AlegreyaSans-Regular.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" as="image" href="img/hero-1920.webp" imagesrcset="img/hero-1280.webp 1280w, img/hero-1920.webp 1920w" imagesizes="100vw">
+<link rel="stylesheet" href="css/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="top-nav">
+  <a class="nav__brand" href="#top" aria-label="KASSEN, back to top">
+    <img src="img/mon-hino.webp" alt="" width="32" height="32">
+    <span class="nav__word">KASSEN</span><span class="nav__kanji" lang="ja">合戦</span>
+  </a>
+  <nav aria-label="Sections">
+    <ul class="nav__links">
+      <li><a href="#trailer">Trailer</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#battles">Battles</a></li>
+      <li><a href="#units">Units</a></li>
+      <li><a href="#gallery">Gallery</a></li>
+      <li><a href="#studio">Studio</a></li>
+      <li><a href="#tested">Tested</a></li>
+    </ul>
+  </nav>
+  <a class="btn btn--small btn--seal" href="play/">Play <span lang="ja">出陣</span></a>
+</header>
+
+<main id="main">
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <div class="hero__media" aria-hidden="true">
+    <div class="hero__kb">
+      <img src="img/hero-1920.webp" srcset="img/hero-1280.webp 1280w, img/hero-1920.webp 1920w" sizes="100vw" alt="" width="1920" height="1080" fetchpriority="high">
+    </div>
+  </div>
+  <div class="hero__veil" aria-hidden="true"></div>
+  <div class="embers" aria-hidden="true"></div>
+
+  <div class="hero__inner">
+    <p class="hero__era"><span>Sengoku Japan</span><span class="dot" aria-hidden="true">◆</span><span>Mino Province, 1574</span></p>
+    <h1 class="logo" id="hero-title">
+      <span class="logo__word">KASSEN</span>
+      <span class="logo__seal" lang="ja" aria-hidden="true">合戦</span>
+      <span class="logo__sub">Fields of the Warring States</span>
+    </h1>
+    <p class="hero__tag">Hold the ford. Break their line. Protect your general.<br>
+      A real-time tactical battle game with about 830 soldiers on the field, each one fighting for himself.</p>
+
+    <div class="hero__cta">
+      <a class="btn btn--primary" href="play/">
+        <span class="btn__kanji" lang="ja" aria-hidden="true">出陣</span>
+        <span>Play in browser</span>
+      </a>
+      <a class="btn btn--ghost" href="#trailer" data-play-trailer>
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        Watch trailer
+      </a>
+      <a class="btn btn--ghost" href="https://github.com/thekindofme/kassen">
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <p class="hero__note">
+      <span>Desktop browser recommended</span><span class="dot" aria-hidden="true">·</span><span>about 100&nbsp;MB download</span><span class="dot" aria-hidden="true">·</span><span>keyboard and mouse</span>
+    </p>
+    <p class="hero__free">Free and open source <span class="dot" aria-hidden="true">·</span> made in Godot 4.7</p>
+  </div>
+
+  <a class="hero__scroll" href="#trailer" aria-label="Scroll to the trailer"><span></span></a>
+</section>
+
+<!-- ============ TRAILER ============ -->
+<section class="section section--trailer" id="trailer" aria-labelledby="trailer-title">
+  <div class="wrap">
+    <header class="sh reveal">
+      <span class="seal" lang="ja" aria-hidden="true">一</span>
+      <p class="sh__eyebrow">The trailer</p>
+      <h2 class="sh__title" id="trailer-title">Two armies meet at the Black River</h2>
+      <p class="sh__lede">An AI-versus-AI battle at Kurogawa, filmed in-engine by a director camera at close zoom. Nothing here is pre-rendered: every soldier you see is simulated.</p>
+    </header>
+
+    <figure class="screen reveal">
+      <div class="screen__frame">
+        <video id="trailer-video" controls playsinline preload="none" poster="video/showcase-poster.webp" width="1280" height="720" aria-label="KASSEN showcase trailer">
+          <source src="video/showcase.mp4" type="video/mp4">
+          Your browser cannot play this video. <a href="video/showcase.mp4">Download the trailer (MP4)</a>.
+        </video>
+        <button class="screen__play" type="button" aria-label="Play the trailer" data-video="trailer-video">
+          <span class="screen__play-ring"><svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span>
+          <span class="screen__play-label">Play trailer <span class="muted">1:25</span></span>
+        </button>
+      </div>
+      <figcaption>Showcase battle, The Ford at Kurogawa. Captured frame-perfect from the running game at 30 fps.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="section section--features" id="features" aria-labelledby="features-title">
+  <div class="wrap">
+    <header class="sh reveal">
+      <span class="seal" lang="ja" aria-hidden="true">二</span>
+      <p class="sh__eyebrow">The battle</p>
+      <h2 class="sh__title" id="features-title">Mass, weight and nerve</h2>
+      <p class="sh__lede">Inspired by the battle mode of the classic Sengoku strategy games, repainted as a living ink-and-lacquer diorama. You win by manoeuvre, not by spending more men.</p>
+    </header>
+
+    <ul class="stats reveal" aria-label="KASSEN in numbers">
+      <li><strong>~830</strong><span>soldiers on the field</span></li>
+      <li><strong>24</strong><span>regiments</span></li>
+      <li><strong>6</strong><span>unit types</span></li>
+      <li><strong>30&nbsp;Hz</strong><span>battle simulation</span></li>
+      <li><strong>2</strong><span>hand-made battlefields</span></li>
+    </ul>
+
+    <div class="bento">
+      <article class="feat feat--wide reveal">
+        <img src="img/gallery/ford-melee-800.webp" alt="Crimson and indigo regiments locked in a melee beside a river village." loading="lazy" width="800" height="450">
+        <div class="feat__body">
+          <h3>Armies of individuals</h3>
+          <p>Each regiment is a block of men, and each man is simulated on his own. Soldiers hold their slot in formation, break off to duel, take hits against their armour, stagger, and fall where they stand.</p>
+        </div>
+      </article>
+      <article class="feat reveal">
+        <img src="img/gallery/deploy-800.webp" alt="Deployment phase: crimson regiments arranged inside a gold-bordered zone, with the HUD unit cards below." loading="lazy" width="800" height="450">
+        <div class="feat__body">
+          <h3>Formations and battle lines</h3>
+          <p>Right-click to march in formation. <kbd>RMB</kbd>-drag to draw the line itself: its frontage, depth and facing, previewed as a ghost before you let go.</p>
+        </div>
+      </article>
+      <article class="feat reveal">
+        <img src="img/gallery/cavalry-800.webp" alt="Crimson cavalry charges across a stream into a line of indigo spearmen." loading="lazy" width="800" height="450">
+        <div class="feat__body">
+          <h3>Charges and braced spears</h3>
+          <p>Horsemen at full gallop hit with a charge bonus and knock men off their feet. Yari ashigaru standing firm and facing the charge brace their spears and turn it into a slaughter of horses.</p>
+        </div>
+      </article>
+      <article class="feat reveal">
+        <img src="img/gallery/volley-800.webp" alt="Close-up of a matchlock volley: muzzle flashes, a bank of white smoke and arrows in flight." loading="lazy" width="800" height="450">
+        <div class="feat__body">
+          <h3>Arrows, smoke and fear</h3>
+          <p>Archers loft volleys over friendly heads. Matchlock gunners fire point-blank, then vanish in banks of smoke that drift with the wind. Gunfire, flanks and casualties wear morale down until a regiment wavers, routs, and runs.</p>
+        </div>
+      </article>
+      <article class="feat reveal">
+        <img src="img/gallery/village-smoke-800.webp" alt="Indigo regiments advance on a village held by crimson troops through gunsmoke." loading="lazy" width="800" height="450">
+        <div class="feat__body">
+          <h3>An AI general</h3>
+          <p>Lord Mizuno chooses to attack, defend or skirmish, forms a battle line, softens you up before the assault, sends cavalry around your flanks, cycle-charges and fights for the fords. Three difficulty levels.</p>
+        </div>
+      </article>
+      <article class="feat reveal">
+        <img src="img/gallery/mist-deploy-800.webp" alt="Deployment at dawn in Tenmoku Pass, with mist drifting over the hills." loading="lazy" width="800" height="450">
+        <div class="feat__body">
+          <h3>Deployment</h3>
+          <p>Before the conch sounds, place every regiment inside your gold zone and set its frontage. A good deployment wins half the battle.</p>
+        </div>
+      </article>
+      <article class="feat feat--wide feat--maps reveal">
+        <img src="img/kurogawa-900.webp" alt="Painted key art of the Kurogawa plain: a river, a village and two camps." loading="lazy" width="900" height="506">
+        <div class="feat__body">
+          <h3>Two hand-made battlefields</h3>
+          <p>A summer river plain with a main ford, a hidden northern ford and a shrine hill. A mountain pass at dawn where the enemy holds the ridge and the mist hides everything. Both are composed by hand, with real cover, high ground and flanking routes.</p>
+          <a class="textlink" href="#battles">See the battles <span aria-hidden="true">→</span></a>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BATTLES ============ -->
+<section class="section section--battles" id="battles" aria-labelledby="battles-title">
+  <div class="wrap">
+    <header class="sh reveal">
+      <span class="seal" lang="ja" aria-hidden="true">三</span>
+      <p class="sh__eyebrow">The battles</p>
+      <h2 class="sh__title" id="battles-title">Two fields, two problems</h2>
+      <p class="sh__lede">You are Hino Masatora, a young heir commanding his father's veterans for the first time. Lord Mizuno Tadakatsu has broken the old alliance and means to cut the Hino off from the capital road.</p>
+    </header>
+
+    <article class="battle reveal">
+      <div class="battle__art">
+        <img src="img/kurogawa-1600.webp" srcset="img/kurogawa-900.webp 900w, img/kurogawa-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 60vw" alt="Key art: a Hino samurai looks down over the Kurogawa plain, the river ford and the indigo Mizuno camp beyond." loading="lazy" width="1600" height="900">
+      </div>
+      <div class="battle__card">
+        <span class="battle__seal" lang="ja" aria-hidden="true">黒川</span>
+        <p class="battle__num">Battle I</p>
+        <h3>The Ford at Kurogawa</h3>
+        <ul class="chips" aria-label="Conditions"><li>Summer</li><li>Midday</li><li>Open plain</li></ul>
+        <p>Hold the only ford of the Black River. The Mizuno must cross the shallows under your bows, or not at all.</p>
+        <p class="muted">A river with a main ford and a hidden northern one, a village, rice paddies and the Hachiman shrine hill. A field battle of manoeuvre: watch the north.</p>
+      </div>
+    </article>
+
+    <article class="battle battle--flip reveal">
+      <div class="battle__art">
+        <img src="img/tenmoku-1600.webp" srcset="img/tenmoku-900.webp 900w, img/tenmoku-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 60vw" alt="Key art: Mizuno banners line a misty ridge with a shrine and torii, while crimson troops climb through the pines below." loading="lazy" width="1600" height="900">
+      </div>
+      <div class="battle__card">
+        <span class="battle__seal" lang="ja" aria-hidden="true">天目峠</span>
+        <p class="battle__num">Battle II</p>
+        <h3>Mist over Tenmoku Pass</h3>
+        <ul class="chips" aria-label="Conditions"><li>Dawn</li><li>Mist</li><li>Hill pass</li></ul>
+        <p>The Mizuno hold the high ground above a fog-choked pass. Climb through pine and mist to dislodge them.</p>
+        <p class="muted">An uphill assault through a narrow throat, with a woodcutters' track that leads round the enemy's flank, if you can find it in the mist.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============ UNITS ============ -->
+<section class="section section--units" id="units" aria-labelledby="units-title">
+  <div class="wrap">
+    <header class="sh sh--light reveal">
+      <span class="seal" lang="ja" aria-hidden="true">四</span>
+      <p class="sh__eyebrow">The army</p>
+      <h2 class="sh__title" id="units-title">Six kinds of men</h2>
+      <p class="sh__lede">Spear beats horse, horse beats bow and gun, missiles beat spear, and the samurai beat almost everyone. Read the field, then pick the fight.</p>
+    </header>
+
+    <ul class="units">
+      <li class="unit reveal">
+        <div class="unit__portrait"><img src="img/units/yari-320.webp" srcset="img/units/yari-320.webp 320w, img/units/yari.webp 512w" sizes="(max-width: 600px) 45vw, 260px" alt="Portrait of a yari ashigaru in a red jingasa hat, holding a spear." loading="lazy" width="320" height="320"></div>
+        <span class="unit__seal" lang="ja" aria-hidden="true">槍</span>
+        <h3>Yari Ashigaru</h3>
+        <p class="unit__meta">60 men <span aria-hidden="true">·</span> line infantry</p>
+        <p>Cheap spearmen who hold the line. Braced and facing the enemy, they wreck a cavalry charge, but their morale is low.</p>
+      </li>
+      <li class="unit reveal">
+        <div class="unit__portrait"><img src="img/units/yumi-320.webp" srcset="img/units/yumi-320.webp 320w, img/units/yumi.webp 512w" sizes="(max-width: 600px) 45vw, 260px" alt="Portrait of a yumi ashigaru archer with a longbow and quiver." loading="lazy" width="320" height="320"></div>
+        <span class="unit__seal" lang="ja" aria-hidden="true">弓</span>
+        <h3>Yumi Ashigaru</h3>
+        <p class="unit__meta">40 men <span aria-hidden="true">·</span> archers</p>
+        <p>Long-range arcing volleys that fly over your own men. Deadly from behind a wall of spears, helpless in melee.</p>
+      </li>
+      <li class="unit reveal">
+        <div class="unit__portrait"><img src="img/units/teppo-320.webp" srcset="img/units/teppo-320.webp 320w, img/units/teppo.webp 512w" sizes="(max-width: 600px) 45vw, 260px" alt="Portrait of a teppo ashigaru holding a smoking matchlock." loading="lazy" width="320" height="320"></div>
+        <span class="unit__seal" lang="ja" aria-hidden="true">鉄砲</span>
+        <h3>Teppo Ashigaru</h3>
+        <p class="unit__meta">40 men <span aria-hidden="true">·</span> matchlock gunners</p>
+        <p>A devastating volley at short range that frightens whoever it hits. Then a slow reload inside their own smoke.</p>
+      </li>
+      <li class="unit reveal">
+        <div class="unit__portrait"><img src="img/units/samurai-320.webp" srcset="img/units/samurai-320.webp 320w, img/units/samurai.webp 512w" sizes="(max-width: 600px) 45vw, 260px" alt="Portrait of a katana samurai in red lacquered armour and a black menpō mask." loading="lazy" width="320" height="320"></div>
+        <span class="unit__seal" lang="ja" aria-hidden="true">侍</span>
+        <h3>Katana Samurai</h3>
+        <p class="unit__meta">32 men <span aria-hidden="true">·</span> elite shock infantry</p>
+        <p>High attack, high defence, iron morale. They break lines, but have no answer to a cavalry charge.</p>
+      </li>
+      <li class="unit reveal">
+        <div class="unit__portrait"><img src="img/units/cavalry-320.webp" srcset="img/units/cavalry-320.webp 320w, img/units/cavalry.webp 512w" sizes="(max-width: 600px) 45vw, 260px" alt="Portrait of a mounted samurai beside his horse, both in red armour." loading="lazy" width="320" height="320"></div>
+        <span class="unit__seal" lang="ja" aria-hidden="true">騎馬</span>
+        <h3>Yari Cavalry</h3>
+        <p class="unit__meta">20 riders <span aria-hidden="true">·</span> mounted shock</p>
+        <p>Fast, with a huge charge bonus. Hunt archers and flanks, pull out and charge again. Never ride into braced spears.</p>
+      </li>
+      <li class="unit reveal">
+        <div class="unit__portrait"><img src="img/units/general-320.webp" srcset="img/units/general-320.webp 320w, img/units/general.webp 512w" sizes="(max-width: 600px) 45vw, 260px" alt="Portrait of the general in black and gold armour with a crescent helmet crest." loading="lazy" width="320" height="320"></div>
+        <span class="unit__seal" lang="ja" aria-hidden="true">大将</span>
+        <h3>General's Hatamoto</h3>
+        <p class="unit__meta">12 riders <span aria-hidden="true">·</span> bodyguard</p>
+        <p>The general and his mounted guard. His presence steadies every regiment nearby. If he dies, the whole army feels it.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ GALLERY ============ -->
+<section class="section section--gallery" id="gallery" aria-labelledby="gallery-title">
+  <div class="wrap">
+    <header class="sh reveal">
+      <span class="seal" lang="ja" aria-hidden="true">五</span>
+      <p class="sh__eyebrow">In the game</p>
+      <h2 class="sh__title" id="gallery-title">From the field</h2>
+      <p class="sh__lede">Unretouched captures from the running game.</p>
+    </header>
+
+    <ul class="gallery" id="gallery-grid">
+      <li class="g g--big"><a href="img/gallery/cavalry.webp" data-caption="Hino cavalry charge across the stream into the Mizuno spear line."><img src="img/gallery/cavalry-800.webp" alt="Crimson cavalry charging across a stream into an indigo spear line." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/volley.webp" data-caption="A matchlock volley at close range: muzzle flash, smoke and arrows in the air."><img src="img/gallery/volley-800.webp" alt="Matchlock volley with muzzle flashes and smoke." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/ford-melee.webp" data-caption="The melee at the ford of Kurogawa."><img src="img/gallery/ford-melee-800.webp" alt="Dense melee of crimson and indigo soldiers at a river ford." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/deploy.webp" data-caption="Deployment: the Hino army inside its gold zone, with unit cards, minimap and orders panel."><img src="img/gallery/deploy-800.webp" alt="Deployment phase with the full HUD." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/battle-begins.webp" data-caption="The conch sounds: deployment is over and the battle begins."><img src="img/gallery/battle-begins-800.webp" alt="The Battle! banner across the map as the fight starts." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/village-smoke.webp" data-caption="Gunsmoke hangs over the village as the Mizuno close in."><img src="img/gallery/village-smoke-800.webp" alt="Gunsmoke drifting over a village during an assault." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/tenmoku-shrine.webp" data-caption="Tenmoku Pass: the assault reaches the shrine on the ridge."><img src="img/gallery/tenmoku-shrine-800.webp" alt="Fighting around a hilltop shrine with red maples and smoke." loading="lazy" width="800" height="450"></a></li>
+      <li class="g g--big g--right"><a href="img/gallery/hud-melee.webp" data-caption="The village falls into a brawl. The power bar at the top tracks both armies."><img src="img/gallery/hud-melee-800.webp" alt="Chaotic melee around thatched farmhouses, with the battle HUD." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/mist-deploy.webp" data-caption="Dawn mist over Tenmoku Pass during deployment."><img src="img/gallery/mist-deploy-800.webp" alt="Regiments deploying in thick morning mist." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/tenmoku-mist.webp" data-caption="Low-lying mist hides both armies on the Tenmoku ridge."><img src="img/gallery/tenmoku-mist-800.webp" alt="Two armies half hidden in drifting mist on a hillside." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/volley-bank.webp" data-caption="A bank of matchlock smoke rolls across the river."><img src="img/gallery/volley-bank-800.webp" alt="A thick bank of gunsmoke over the river between two armies." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/north-ford.webp" data-caption="The hidden northern ford, among the pines."><img src="img/gallery/north-ford-800.webp" alt="Regiments crossing a narrow ford between pine woods." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/select.webp" data-caption="Choose your battle and difficulty."><img src="img/gallery/select-800.webp" alt="The battle select screen with two scenario cards and difficulty options." loading="lazy" width="800" height="450"></a></li>
+      <li class="g"><a href="img/gallery/results.webp" data-caption="Victory: the results scroll lists every regiment's losses and kills."><img src="img/gallery/results-800.webp" alt="The victory results scroll on washi paper." loading="lazy" width="800" height="450"></a></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ STUDIO ============ -->
+<section class="section section--studio" id="studio" aria-labelledby="studio-title">
+  <div class="wrap">
+    <header class="sh reveal">
+      <span class="seal" lang="ja" aria-hidden="true">六</span>
+      <p class="sh__eyebrow">How it was made</p>
+      <h2 class="sh__title" id="studio-title">Built by a studio of agents</h2>
+      <p class="sh__lede">KASSEN was made by a team of AI agents, each with one job, working like a small game studio: a creative director setting the vision and reviewing every deliverable, and eight specialists building to it.</p>
+    </header>
+
+    <ol class="roster">
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">総</span><div><h3>Creative director</h3><p>Wrote the game design document, the art bible and the tech plan, and gave an art-direction review of every deliverable.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">画</span><div><h3>Technical artist</h3><p>Turned 57 generated images into one 4096² unit atlas: magenta keying, frame splitting, foot anchors and clan recolouring. 6 units × 2 clans × 4 animations × 8 frames.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">機</span><div><h3>Lead engine programmer</h3><p>The 30 Hz battle simulation, a y-sorted MultiMesh renderer for hundreds of soldiers, the controls, deployment and the test suites.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">将</span><div><h3>AI programmer</h3><p>The enemy general: posture, battle line, soften-then-assault, cavalry flanking and cycle charges, ford tactics and difficulty levels.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">面</span><div><h3>UI/UX designer</h3><p>The lacquer-and-washi theme: title, battle select, briefing, the HUD with unit cards, minimap and power bar, and the results scroll.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">霧</span><div><h3>VFX artist</h3><p>Gunsmoke banks, dust, blood and churned mud, spent arrows, drifting cloud shadows, low-lying mist and the colour grade.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">地</span><div><h3>Level designer</h3><p>Composed both battlefields by hand: rivers and fords, villages and shrines, hills, forests and the flanking routes.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">音</span><div><h3>Audio director</h3><p>104 sounds from CC0 sources and synthesis: taiko, horagai conch and shakuhachi music layers, and a pooled positional audio system.</p></div></li>
+      <li class="member reveal"><span class="member__seal" lang="ja" aria-hidden="true">正</span><div><h3>QA automation</h3><p>An automated player that plays the whole game through real input events, plus the recording pipeline behind every video on this page.</p></div></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ TESTED ============ -->
+<section class="section section--tested" id="tested" aria-labelledby="tested-title">
+  <div class="wrap">
+    <header class="sh reveal">
+      <span class="seal" lang="ja" aria-hidden="true">七</span>
+      <p class="sh__eyebrow">Proof</p>
+      <h2 class="sh__title" id="tested-title">Tested end to end</h2>
+      <p class="sh__lede">A robot plays the game the way you would. It moves a visible cursor, clicks the menus, drags formation lines and presses hotkeys. Every action is a real mouse or keyboard event, so if a button is broken, the test fails. Each run is recorded frame by frame and checked against a list of things that must happen.</p>
+    </header>
+
+    <ul class="howto reveal" aria-label="How the tests work">
+      <li><span class="howto__n">1</span><p><strong>Real input.</strong> Clicks, drags and key presses go through the same input path as yours. No shortcuts into the code.</p></li>
+      <li><span class="howto__n">2</span><p><strong>A visible cursor.</strong> A drawn cursor shows every injected click and drag, so you can follow along.</p></li>
+      <li><span class="howto__n">3</span><p><strong>Checks along the way.</strong> Deployed inside the zone? Flankers reached the ridge? Victory, results, back to the title? Each one is a PASS or a FAIL.</p></li>
+    </ul>
+
+    <div class="proofs">
+      <article class="proof reveal">
+        <div class="proof__video">
+          <video controls playsinline preload="none" poster="video/kurogawa-poster.webp" width="1280" height="720" aria-label="Full-flow test run on Kurogawa">
+            <source src="video/kurogawa.mp4" type="video/mp4">
+            <a href="video/kurogawa.mp4">Download the video (MP4)</a>
+          </video>
+        </div>
+        <div class="proof__body">
+          <div>
+            <h3>Kurogawa, full flow</h3>
+            <p>Title, battle select, briefing, deployment, battle, victory, results and back to the title, all through mouse and keyboard. 2:49.</p>
+          </div>
+          <span class="pass" aria-label="29 of 29 checks passed"><b>29/29</b> PASS</span>
+        </div>
+      </article>
+      <article class="proof reveal">
+        <div class="proof__video">
+          <video controls playsinline preload="none" poster="video/tenmoku-poster.webp" width="1280" height="720" aria-label="Full-flow test run on Tenmoku Pass">
+            <source src="video/tenmoku.mp4" type="video/mp4">
+            <a href="video/tenmoku.mp4">Download the video (MP4)</a>
+          </video>
+        </div>
+        <div class="proof__body">
+          <div>
+            <h3>Tenmoku Pass</h3>
+            <p>The same flow on the second map: an uphill attack through mist, with a flanking column sent along the woodcutters' track. 2:58.</p>
+          </div>
+          <span class="pass" aria-label="18 of 18 checks passed"><b>18/18</b> PASS</span>
+        </div>
+      </article>
+      <article class="proof reveal">
+        <div class="proof__video">
+          <video controls playsinline preload="none" poster="video/battle-poster.webp" width="1280" height="720" aria-label="Battle-level test run">
+            <source src="video/battle.mp4" type="video/mp4">
+            <a href="video/battle.mp4">Download the video (MP4)</a>
+          </video>
+        </div>
+        <div class="proof__body">
+          <div>
+            <h3>The battle</h3>
+            <p>Selection, formation drags, archer fire, a cavalry charge, every hotkey, and a victory. 2:28.</p>
+          </div>
+          <span class="pass" aria-label="22 of 22 checks passed"><b>22/22</b> PASS</span>
+        </div>
+      </article>
+      <article class="proof proof--link reveal">
+        <a class="proof__video proof__jump" href="#trailer" data-play-trailer>
+          <img src="video/showcase-poster.webp" alt="" loading="lazy" width="1280" height="720">
+          <span class="proof__jump-label">Watch above <span aria-hidden="true">↑</span></span>
+        </a>
+        <div class="proof__body">
+          <div>
+            <h3>Showcase</h3>
+            <p>The trailer is a test too: an AI-versus-AI battle that must reach a result, filmed by a director camera. 1:25.</p>
+          </div>
+          <span class="pass" aria-label="Showcase passed"><b>3/3</b> PASS</span>
+        </div>
+      </article>
+    </div>
+    <p class="fineprint reveal">The recordings are frame-perfect captures of the running game (Godot's movie writer at a fixed 30 fps). The full logs are in <a href="https://github.com/thekindofme/kassen/tree/main/proof">the repository</a>. Beyond these runs, 87 simulation checks, 76 UI checks and a 23-check hotkey smoke test run headless.</p>
+  </div>
+</section>
+
+<!-- ============ PLAY BAND ============ -->
+<section class="band" aria-labelledby="band-title">
+  <div class="band__bg" aria-hidden="true"><img src="img/victory-1600.webp" srcset="img/victory-900.webp 900w, img/victory-1600.webp 1600w" sizes="100vw" alt="" loading="lazy" width="1600" height="900"></div>
+  <div class="band__inner reveal">
+    <span class="band__kanji" lang="ja" aria-hidden="true">出陣</span>
+    <h2 id="band-title">The conch is sounding.</h2>
+    <p>No install, no account. Pick a battle and take the field.</p>
+    <a class="btn btn--primary" href="play/"><span class="btn__kanji" lang="ja" aria-hidden="true">出陣</span><span>Play in browser</span></a>
+    <p class="hero__note"><span>Desktop browser recommended</span><span class="dot" aria-hidden="true">·</span><span>about 100&nbsp;MB</span><span class="dot" aria-hidden="true">·</span><span>keyboard and mouse</span></p>
+  </div>
+</section>
+
+<!-- ============ CREDITS ============ -->
+<section class="section section--credits" id="credits" aria-labelledby="credits-title">
+  <div class="wrap">
+    <header class="sh reveal">
+      <span class="seal" lang="ja" aria-hidden="true">八</span>
+      <p class="sh__eyebrow">Open source</p>
+      <h2 class="sh__title" id="credits-title">Credits and licence</h2>
+    </header>
+
+    <div class="credits">
+      <div class="credits__col reveal">
+        <h3>Licences</h3>
+        <dl class="lic">
+          <div><dt>Code</dt><dd><a href="https://github.com/thekindofme/kassen/blob/main/LICENSE">MIT License</a></dd></div>
+          <div><dt>Art and synthesised audio</dt><dd><a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, “KASSEN by Yasith Fernando”</dd></div>
+          <div><dt>Third-party audio</dt><dd>CC0 1.0 / public domain</dd></div>
+          <div><dt>Fonts</dt><dd>Shippori Mincho B1, Yuji Boku and Alegreya Sans under the <a href="fonts/OFL-ShipporiMinchoB1.txt">SIL Open Font License 1.1</a> (<a href="fonts/OFL-YujiBoku.txt">Yuji Boku</a>, <a href="fonts/OFL-AlegreyaSans.txt">Alegreya Sans</a>, <a href="fonts/CREDITS.md">credits</a>)</dd></div>
+        </dl>
+        <p class="muted small">Full details and attribution: <a href="https://github.com/thekindofme/kassen/blob/main/ASSETS-LICENSE.md">ASSETS-LICENSE.md</a>. Most art was made with image generation and assembled by the scripts in the repository.</p>
+        <p class="disclaimer">KASSEN is an independent fan project. Not affiliated with or endorsed by Creative Assembly or SEGA; Total War and Shogun are trademarks of their respective owners.</p>
+      </div>
+      <div class="credits__col reveal">
+        <h3>Run from source</h3>
+        <ol class="steps">
+          <li>Install <a href="https://godotengine.org/">Godot 4.7</a>.</li>
+          <li>Clone the repository and launch the game from its root.</li>
+        </ol>
+<pre class="code" tabindex="0"><code>git clone https://github.com/thekindofme/kassen.git
+cd kassen
+godot --path .</code></pre>
+        <p class="muted small">Title, Battles, choose a battle and difficulty, read the briefing, deploy in the gold zone, then <em>Begin Battle</em>.</p>
+        <h3 class="mt">Controls</h3>
+        <dl class="keys">
+          <div><dt><kbd>LMB</kbd> / drag</dt><dd>Select, box-select</dd></div>
+          <div><dt><kbd>RMB</kbd></dt><dd>Move or attack</dd></div>
+          <div><dt><kbd>RMB</kbd>-drag</dt><dd>Draw the battle line</dd></div>
+          <div><dt><kbd>R</kbd> <kbd>F</kbd> <kbd>H</kbd></dt><dd>Run, fire at will, halt</dd></div>
+          <div><dt><kbd>Space</kbd></dt><dd>Pause</dd></div>
+          <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / wheel</dt><dd>Camera</dd></div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__inner">
+    <div class="foot__brand">
+      <img src="img/mon-hino.webp" alt="" width="44" height="44">
+      <span class="foot__vs" aria-hidden="true">◆</span>
+      <img src="img/mon-mizuno.webp" alt="" width="44" height="44">
+      <p><strong>KASSEN</strong> <span lang="ja">合戦</span><br><span class="muted">Fields of the Warring States</span></p>
+    </div>
+    <ul class="foot__links">
+      <li><a href="play/">Play</a></li>
+      <li><a href="https://github.com/thekindofme/kassen">GitHub</a></li>
+      <li><a href="https://github.com/thekindofme/kassen/issues">Report a bug</a></li>
+      <li><a href="#top">Back to top <span aria-hidden="true">↑</span></a></li>
+    </ul>
+  </div>
+</footer>
+
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot viewer">
+  <figure>
+    <img id="lb-img" src="data:," alt="">
+    <figcaption id="lb-cap"></figcaption>
+  </figure>
+  <button class="lb-btn lb-close" type="button" aria-label="Close" data-lb="close">✕</button>
+  <button class="lb-btn lb-prev" type="button" aria-label="Previous screenshot" data-lb="prev">‹</button>
+  <button class="lb-btn lb-next" type="button" aria-label="Next screenshot" data-lb="next">›</button>
+</dialog>
+
+<script src="js/main.js" defer></script>
+</body>
+</html>
