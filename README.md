@@ -1,6 +1,8 @@
 # KASSEN 合戦 — Fields of the Warring States
 
 A 2D real-time tactical battle game in **Godot 4.7**, inspired by the battle mode of *Shogun: Total War*.
+KASSEN is an independent fan project, not affiliated with or endorsed by Creative Assembly or SEGA;
+*Shogun: Total War* and *Total War* are trademarks of their respective owners (see [Trademarks](#license)).
 It is Sengoku Japan in 1574. You command the crimson **Hino** clan against the indigo **Mizuno** warlord's AI:
 about 830 individually simulated soldiers in 24 regiments, with formations, charges, braced spears, arrow volleys,
 matchlock smoke, morale, routs and a general whose death can break an army.
@@ -8,7 +10,7 @@ matchlock smoke, morale, routs and a general whose death can break an army.
 ## Play
 
 ```bash
-godot --path ~/code/kassen
+godot --path .   # from the repository root
 ```
 
 Title → **Battles** → choose a battle and difficulty → briefing → **deploy** your army in the gold zone → **Begin Battle**.
@@ -68,3 +70,13 @@ Recordings in `proof/` (720p shareable copies are in `proof/share/`; logs are co
 
 The recordings are frame-perfect captures of the running game (`--write-movie`, fixed 30 fps). A fake cursor
 shows every injected click and drag.
+
+## License
+
+- Code: MIT, see [`LICENSE`](LICENSE).
+- Art and synthesised audio: CC BY 4.0. Fonts: SIL OFL 1.1. Third-party audio: CC0 / public domain.
+  Details and attribution in [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md),
+  [`assets/fonts/CREDITS.md`](assets/fonts/CREDITS.md) and [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md).
+- Trademarks: *Total War* and *Shogun: Total War* are trademarks of SEGA / Creative Assembly and are named only
+  to describe this game's inspiration. KASSEN is not affiliated with, endorsed by or sponsored by
+  Creative Assembly or SEGA.
