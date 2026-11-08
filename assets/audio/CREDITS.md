@@ -3,7 +3,8 @@
 Every file in `assets/audio/` is either **synthesised for KASSEN** (no third-party material) or
 **built from public-domain / CC0 recordings**. No file needs attribution, but the sources are listed
 here so the provenance is auditable and every raw file can be fetched again. Licences were checked
-on each source page on 2026-11-07. Raw downloads are kept out of git under `art_src/audio_dl/`, and
+on each source page on 2026-11-07 and re-verified on 2026-11-09 (OpenGameArt licence
+field, Wikimedia Commons file metadata, and remote file sizes / SHA-1 matched to the local raw files). Raw downloads are kept out of git under `art_src/audio_dl/`, and
 the processing and synthesis code lives in `art_src/audio_dl/synth/` (`build_sfx.py`, `music.py`).
 
 ## Third-party sources (all CC0 1.0 or public domain)
@@ -23,7 +24,7 @@ the processing and synthesis code lives in `art_src/audio_dl/synth/` (`build_sfx
 | 11 | https://opengameart.org/content/crowd-shoutingspeaking-ambience | StarNinjas | CC0 | `crowd_shouting.ogg` | warcry_*, melee_loop_* |
 | 12 | https://opengameart.org/content/male-gruntyelling-sounds | HaelDB | CC0 (dual-licensed CC0 / OGA-BY 3.0; used under CC0) | `yelling sounds/*.wav` | warcry_*, rout_cry_*, death_grunt_*, kachidoki_01 (texture), melee_loop_*, kakegoe shouts in music_battle / music_intense |
 | 13 | https://opengameart.org/content/grunts-male-death-and-pain | thebardofblasphemy | CC0 | `death pain grunts.wav` | death_grunt_*, melee_loop_* |
-| 14 | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone | qubodup | CC0 | `Fantozzi-Sand*.ogg` | march_loop |
+| 14 | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone | Fantozzi (submitted by qubodup) | CC0 | `Fantozzi-Sand*.ogg` | march_loop |
 | 15 | https://opengameart.org/content/mild-wind-background-noise | Bashar3A | CC0 | `wind background noise 2.wav` | wind_plain_loop (high-passed under-layer only) |
 | 16 | https://opengameart.org/content/park-ambiences | Thimras | CC0 | `park_ambience_birds.wav`, `park_ambience_river.wav` | birds_loop, river_loop |
 | 17 | https://commons.wikimedia.org/wiki/File:Six_Horses_Galloping_By.ogg | freesound_community / Bruno Auzet (via Pixabay) | CC0 | whole file | horse_gallop_loop |
@@ -42,7 +43,7 @@ along with the bow twang and the arrow fly-by noise. The music and stingers are 
 `synth/music.py`.
 
 - music_menu, music_deploy, music_battle, music_intense, stinger_victory, stinger_defeat, stinger_general_fallen
-- horagai_01, horagai_02, kachidoki_01 (synthetic voices plus CC0 yell texture, #12)
+- horagai_01, horagai_answer_01, kachidoki_01 (synthetic voices plus CC0 yell texture, #12)
 - bow_release_* (synth twang plus CC0 swish, #8), bow_volley_*, arrow_whoosh_* (synth plus #9)
 - ui_click_*, ui_hover_01, ui_back_01, ui_select_01, order_confirm_*, order_attack_*
 - wind_plain_loop (synthesised gusting wind over a high-passed bed from #15)
